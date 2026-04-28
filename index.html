@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clickpse</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #0f1318;
+    --border: #1e2530;
+    --solar: #ffb700;
+    --solar-dim: #7a5500;
+    --eclipse: #ff4500;
+    --eclipse-glow: rgba(255,69,0,0.3);
+    --text: #c8d8e8;
+    --text-dim: #4a5a6a;
+    --green: #00e5a0;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Bebas Neue', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 28px;
+    letter-spacing: 3px;
+    color: var(--solar);
+    text-shadow: 0 0 20px rgba(255,183,0,0.5);
+  }
+
+  .logo span { color: var(--eclipse); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    box-shadow: none;
+    transition: all 0.5s;
+  }
+  .status-dot.active {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* MAIN COMPASS AREA */
+  .compass-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Horizon arc */
+  .horizon-container {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    aspect-ratio: 1;
+  }
+
+  .horizon-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Sun indicator dot — overlay on SVG */
+  .sun-dot {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--solar);
+    box-shadow: 0 0 0 4px rgba(255,183,0,0.2), 0 0 20px var(--solar);
+    transform: translate(-50%, -50%);
+    transition: left 0.8s ease, top 0.8s ease;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .sun-dot::after {
+    content: '☀';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .sun-dot.below-horizon {
+    background: var(--solar-dim);
+    box-shadow: none;
+    opacity: 0.4;
+  }
+
+  /* Crosshair center */
+  .crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .crosshair::before, .crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(0,229,160,0.6);
+  }
+  .crosshair::before {
+    width: 1px; height: 30px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .crosshair::after {
+    width: 30px; height: 1px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* DATA STRIP */
+  .data-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    width: 100%;
+  }
+
+  .data-cell {
+    background: var(--surface);
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  .data-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  .data-value {
+    font-size: 18px;
+    color: var(--solar);
+    letter-spacing: 1px;
+  }
+
+  .data-value.green { color: var(--green); }
+  .data-value.dim { color: var(--text-dim); font-size: 13px; }
+
+  /* ECLIPSE TABS */
+  .eclipse-section {
+    flex-shrink: 0;
+    padding: 10px 12px;
+  }
+
+  .section-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .eclipse-tabs {
+    display: flex;
+    gap: 6px;
+  }
+
+  .eclipse-tab {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+
+  .eclipse-tab:active { transform: scale(0.96); }
+
+  .eclipse-tab.active {
+    border-color: var(--eclipse);
+    color: var(--eclipse);
+    background: rgba(255,69,0,0.05);
+    box-shadow: 0 0 10px var(--eclipse-glow);
+  }
+
+  .eclipse-tab .tab-date { font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+  .eclipse-tab .tab-type { font-size: 9px; opacity: 0.7; }
+
+  /* BOTTOM INFO */
+  .bottom-bar {
+    flex-shrink: 0;
+    padding: 8px 16px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .calibrate-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .calibrate-btn:active {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  /* PERMISSION OVERLAY */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,12,16,0.97);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 100;
+    padding: 32px;
+    text-align: center;
+  }
+
+  .overlay.hidden { display: none; }
+
+  .overlay-icon { font-size: 48px; }
+
+  .overlay-title {
+    font-family: var(--display);
+    font-size: 32px;
+    color: var(--solar);
+    letter-spacing: 3px;
+  }
+
+  .overlay-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    max-width: 280px;
+  }
+
+  .overlay-btn {
+    background: var(--solar);
+    color: #000;
+    border: none;
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 2px;
+    padding: 12px 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .overlay-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+  .overlay-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 14px;
+    padding: 8px 20px;
+  }
+
+  /* Compass ring decoration */
+  .ring-label {
+    font-size: 10px;
+    fill: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .cardinal {
+    font-size: 13px;
+    fill: var(--text);
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1px;
+  }
+
+  .north-cardinal { fill: var(--eclipse); }
+
+  /* Elevation arc ticks */
+  .tick-label {
+    font-size: 9px;
+    fill: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* Arrow indicator for camera direction */
+  .camera-arrow {
+    transition: transform 0.3s ease;
+  }
+
+  /* Scan line effect */
+  .scanline {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  /* Mode indicator */
+  .mode-badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .mode-badge.realtime { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid rgba(0,229,160,0.3); }
+  .mode-badge.eclipse-mode { background: rgba(255,69,0,0.1); color: var(--eclipse); border: 1px solid rgba(255,69,0,0.3); }
+
+  /* Error / warning */
+  .warning {
+    font-size: 10px;
+    color: var(--eclipse);
+    text-align: center;
+    padding: 4px;
+    display: none;
+  }
+  .warning.visible { display: block; }
+</style>
+</head>
+<body>
+
+<!-- PERMISSION OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="overlay-icon">🌑</div>
+  <div class="overlay-title">CLICKPSE</div>
+  <div class="overlay-text">
+    Necesito acceso a tu <strong>ubicación</strong> y al <strong>sensor de orientación</strong> del dispositivo para calcular la posición del sol en tiempo real.
+  </div>
+  <button class="overlay-btn" onclick="requestPermissions()">ACTIVAR SENSORES</button>
+  <button class="overlay-btn secondary" onclick="startManualMode()">Sin sensores (manual)</button>
+</div>
+
+<!-- APP -->
+<header>
+  <div class="logo">CLICK<span>PSE</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="mode-badge realtime" id="modeBadge">TIEMPO REAL</div>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+</header>
+
+<div class="compass-area">
+  <div class="scanline"></div>
+  <div class="horizon-container" id="compassContainer">
+    <!-- SVG compass -->
+    <svg class="horizon-svg" id="compassSvg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+      <!-- Background -->
+      <circle cx="170" cy="170" r="165" fill="#0a0d12" stroke="#1e2530" stroke-width="1"/>
+
+      <!-- Elevation rings -->
+      <circle cx="170" cy="170" r="138" fill="none" stroke="#1a2230" stroke-width="0.5" stroke-dasharray="3,6"/>
+      <circle cx="170" cy="170" r="104" fill="none" stroke="#1a2230" stroke-width="0.5" stroke-dasharray="3,6"/>
+      <circle cx="170" cy="170" r="69" fill="none" stroke="#1a2230" stroke-width="0.5" stroke-dasharray="3,6"/>
+      <circle cx="170" cy="170" r="34" fill="none" stroke="#1a2230" stroke-width="0.5" stroke-dasharray="3,6"/>
+
+      <!-- Elevation labels -->
+      <text x="174" y="37" class="tick-label">90°</text>
+      <text x="174" y="71" class="tick-label">67°</text>
+      <text x="174" y="106" class="tick-label">45°</text>
+      <text x="174" y="140" class="tick-label">22°</text>
+      <text x="174" y="175" class="tick-label">0°</text>
+
+      <!-- Horizon line -->
+      <line x1="5" y1="170" x2="335" y2="170" stroke="#2a3540" stroke-width="1.5"/>
+
+      <!-- Degree ticks around ring -->
+      <g id="azimuthTicks"></g>
+
+      <!-- Cardinal labels -->
+      <text x="170" y="22" class="cardinal north-cardinal" text-anchor="middle">N</text>
+      <text x="318" y="175" class="cardinal" text-anchor="middle">E</text>
+      <text x="170" y="325" class="cardinal" text-anchor="middle">S</text>
+      <text x="22" y="175" class="cardinal" text-anchor="middle">O</text>
+
+      <!-- Camera direction arrow -->
+      <g id="cameraArrow" class="camera-arrow">
+        <polygon points="170,12 162,28 178,28" fill="none" stroke="#00e5a0" stroke-width="1.5" opacity="0.8"/>
+        <line x1="170" y1="28" x2="170" y2="155" stroke="#00e5a0" stroke-width="1" stroke-dasharray="4,4" opacity="0.4"/>
+      </g>
+
+      <!-- Sun position (will be moved by JS) -->
+      <circle id="sunCircle" cx="170" cy="100" r="11" fill="#ffb700" opacity="0.95">
+        <animate attributeName="r" values="11;13;11" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <circle id="sunGlow" cx="170" cy="100" r="18" fill="none" stroke="#ffb700" stroke-width="1" opacity="0.3">
+        <animate attributeName="r" values="18;22;18" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <text id="sunEmoji" x="170" y="104" text-anchor="middle" font-size="10" fill="#0a0c10">☀</text>
+
+      <!-- Outer ring border -->
+      <circle cx="170" cy="170" r="165" fill="none" stroke="#2a3540" stroke-width="2"/>
+      <circle cx="170" cy="170" r="160" fill="none" stroke="#1a2530" stroke-width="0.5"/>
+    </svg>
+
+    <div class="crosshair"></div>
+  </div>
+
+  <div class="warning" id="warning">⚠ Sensor de orientación no disponible — usando azimut manual</div>
+</div>
+
+<!-- DATA STRIP -->
+<div class="data-strip">
+  <div class="data-cell">
+    <div class="data-label">AZIMUT SOL</div>
+    <div class="data-value" id="valAzimuth">---°</div>
+  </div>
+  <div class="data-cell">
+    <div class="data-label">ELEVACIÓN</div>
+    <div class="data-value" id="valElevation">---°</div>
+  </div>
+  <div class="data-cell">
+    <div class="data-label">CÁMARA</div>
+    <div class="data-value green" id="valCamera">---°</div>
+  </div>
+</div>
+
+<!-- ECLIPSE TABS -->
+<div class="eclipse-section">
+  <div class="section-title">▸ Eclipses desde Mallorca</div>
+  <div class="eclipse-tabs">
+    <div class="eclipse-tab" onclick="setEclipseMode(0)" id="tab0">
+      <div class="tab-date">12 AGO 2026</div>
+      <div class="tab-type">Total ◉</div>
+    </div>
+    <div class="eclipse-tab" onclick="setEclipseMode(1)" id="tab1">
+      <div class="tab-date">02 AGO 2027</div>
+      <div class="tab-type">Total ◉</div>
+    </div>
+    <div class="eclipse-tab" onclick="setEclipseMode(2)" id="tab2">
+      <div class="tab-date">26 ENE 2028</div>
+      <div class="tab-type">Anular ◎</div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottom-bar">
+  <div id="locationLabel">📍 Buscando...</div>
+  <button class="calibrate-btn" onclick="resetToRealtime()">⟳ AHORA</button>
+</div>
+
+<script>
+// =============================================
+// SOLAR POSITION ALGORITHM (NOAA / Jean Meeus)
+// =============================================
+
+function toRad(d) { return d * Math.PI / 180; }
+function toDeg(r) { return r * 180 / Math.PI; }
+
+function calcSolarPosition(date, lat, lon) {
+  const JD = date / 86400000 + 2440587.5;
+  const n = JD - 2451545.0;
+
+  // Mean longitude and anomaly
+  const L = (280.460 + 0.9856474 * n) % 360;
+  const g = toRad((357.528 + 0.9856003 * n) % 360);
+
+  // Ecliptic longitude
+  const lambda = toRad(L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g));
+
+  // Obliquity
+  const epsilon = toRad(23.439 - 0.0000004 * n);
+
+  // Right ascension & declination
+  const sinDec = Math.sin(epsilon) * Math.sin(lambda);
+  const dec = Math.asin(sinDec);
+
+  // Hour angle
+  const UT = (date % 86400000) / 3600000; // hours UTC
+  const GMST = (6.697375 + 0.0657098242 * n + UT) % 24;
+  const LMST = (GMST + lon / 15) % 24;
+  const RA = toDeg(Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda))) / 15;
+  const HA = toRad((LMST - ((RA % 24 + 24) % 24)) * 15);
+
+  const latR = toRad(lat);
+
+  // Altitude
+  const sinAlt = Math.sin(latR) * Math.sin(dec) + Math.cos(latR) * Math.cos(dec) * Math.cos(HA);
+  const alt = toDeg(Math.asin(Math.max(-1, Math.min(1, sinAlt))));
+
+  // Azimuth (N=0, E=90)
+  const cosAz = (Math.sin(dec) - Math.sin(latR) * sinAlt) / (Math.cos(latR) * Math.cos(toRad(alt)));
+  let az = toDeg(Math.acos(Math.max(-1, Math.min(1, cosAz))));
+  if (Math.sin(HA) > 0) az = 360 - az;
+
+  return { azimuth: az, elevation: alt };
+}
+
+// =============================================
+// STATE
+// =============================================
+
+const state = {
+  lat: 39.6953, // Mallorca default
+  lon: 2.9216,
+  locationReady: false,
+  orientationReady: false,
+  cameraAzimuth: 0,   // degrees from North
+  cameraPitch: 0,     // degrees up from horizon
+  mode: 'realtime',   // 'realtime' | 'eclipse'
+  eclipseDate: null,
+  compassOffset: 0,   // calibration
+};
+
+// Eclipse dates (max phase at Mallorca, UTC)
+const ECLIPSES = [
+  { date: new Date('2026-08-12T17:47:00Z'), label: '12 AGO 2026', type: 'Total' },
+  { date: new Date('2027-08-02T10:07:00Z'), label: '02 AGO 2027', type: 'Total' },
+  { date: new Date('2028-01-26T15:08:00Z'), label: '26 ENE 2028', type: 'Anular' },
+];
+
+// =============================================
+// PERMISSIONS
+// =============================================
+
+async function requestPermissions() {
+  document.getElementById('overlay').classList.add('hidden');
+
+  // GPS
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(onLocation, onLocationError, {
+      enableHighAccuracy: true, maximumAge: 30000
+    });
+  }
+
+  // Orientation
+  if (typeof DeviceOrientationEvent !== 'undefined') {
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+    state.orientationReady = true;
+  } else {
+    document.getElementById('warning').classList.add('visible');
+  }
+
+  startLoop();
+}
+
+function startManualMode() {
+  document.getElementById('overlay').classList.add('hidden');
+  state.lat = 39.6953;
+  state.lon = 2.9216;
+  state.locationReady = true;
+  document.getElementById('locationLabel').textContent = '📍 Mallorca (manual)';
+  document.getElementById('warning').classList.add('visible');
+  startLoop();
+}
+
+function onLocation(pos) {
+  state.lat = pos.coords.latitude;
+  state.lon = pos.coords.longitude;
+  state.locationReady = true;
+  document.getElementById('statusDot').classList.add('active');
+  document.getElementById('locationLabel').textContent =
+    `📍 ${state.lat.toFixed(3)}°N ${state.lon.toFixed(3)}°E`;
+}
+
+function onLocationError() {
+  state.lat = 39.6953; state.lon = 2.9216;
+  state.locationReady = true;
+  document.getElementById('locationLabel').textContent = '📍 Mallorca (aprox.)';
+}
+
+let lastAlpha = null;
+function onOrientation(evt) {
+  // alpha = compass heading (0=N, 90=W on some devices — we use absolute)
+  let alpha = evt.alpha; // degrees from North (magnetic), clockwise
+  if (evt.webkitCompassHeading !== undefined) {
+    // iOS / some Android: webkitCompassHeading = true heading clockwise from N
+    alpha = evt.webkitCompassHeading;
+  }
+  if (alpha === null) return;
+
+  // Camera faces OPPOSITE to back of phone = same as compass heading
+  state.cameraAzimuth = (alpha + state.compassOffset + 360) % 360;
+
+  // Pitch from beta (0=flat, 90=vertical portrait)
+  if (evt.beta !== null) {
+    // When holding phone vertically (beta≈90), pitch≈0 (camera faces horizon)
+    state.cameraPitch = 90 - Math.abs(evt.beta);
+  }
+
+  state.orientationReady = true;
+  lastAlpha = alpha;
+}
+
+// =============================================
+// RENDER LOOP
+// =============================================
+
+let animFrame;
+
+function startLoop() {
+  function tick() {
+    const now = state.mode === 'realtime' ? new Date() : state.eclipseDate;
+    const sol = calcSolarPosition(now, state.lat, state.lon);
+    renderCompass(sol);
+    animFrame = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// Convert azimuth+elevation to X,Y on the SVG compass circle
+// Center = (170,170), radius 165 for horizon (el=0), center for zenith (el=90)
+function solToXY(azimuth, elevation) {
+  const cx = 170, cy = 170, R = 155;
+  // elevation 0° -> edge of circle, 90° -> center
+  const r = R * (1 - Math.max(0, elevation) / 90);
+  // azimuth: 0=N=top, 90=E=right
+  const angle = toRad(azimuth - 90); // SVG: 0=right, so shift -90
+  const x = cx + r * Math.cos(angle);
+  const y = cy + r * Math.sin(angle);
+  return { x, y };
+}
+
+function renderCompass(sol) {
+  // Move sun on SVG
+  const { x, y } = solToXY(sol.azimuth, sol.elevation);
+  const sunCircle = document.getElementById('sunCircle');
+  const sunGlow = document.getElementById('sunGlow');
+  const sunEmoji = document.getElementById('sunEmoji');
+
+  const belowHorizon = sol.elevation < 0;
+
+  sunCircle.setAttribute('cx', x);
+  sunCircle.setAttribute('cy', y);
+  sunCircle.setAttribute('fill', belowHorizon ? '#7a5500' : '#ffb700');
+  sunCircle.setAttribute('opacity', belowHorizon ? '0.3' : '0.95');
+
+  sunGlow.setAttribute('cx', x);
+  sunGlow.setAttribute('cy', y);
+  sunGlow.setAttribute('opacity', belowHorizon ? '0' : '0.3');
+
+  sunEmoji.setAttribute('x', x);
+  sunEmoji.setAttribute('y', y + 4);
+
+  // Rotate compass ring to camera heading
+  const cameraArrow = document.getElementById('cameraArrow');
+  // Arrow always points up (where camera faces), rotate SVG group
+  const compassSvg = document.getElementById('compassSvg');
+  // Rotate entire SVG content so N is at camera direction
+  const rotate = -state.cameraAzimuth;
+  // Only rotate the compass ring, not sun (sun is absolute)
+  // We rotate the whole SVG around center; sun position recalculated in absolute coords
+  compassSvg.style.transform = `rotate(${rotate}deg)`;
+  compassSvg.style.transformOrigin = '50% 50%';
+
+  // Counter-rotate sun so it stays absolute
+  const sunGroup = document.querySelector('#sunCircle');
+  // We handle this by applying counter-rotation via the individual elements
+  // Actually easier: put sun outside the rotated group
+  // (Already done — sun is in SVG which rotates, so we counter-rotate)
+  // Counter-rotate sun elements
+  const counterRot = state.cameraAzimuth;
+  sunCircle.style.transformOrigin = `${x}px ${y}px`;
+  sunGlow.style.transformOrigin = `${x}px ${y}px`;
+  sunEmoji.style.transformOrigin = `${x}px ${y}px`;
+  sunCircle.style.transform = `rotate(${counterRot}deg)`;
+  sunGlow.style.transform = `rotate(${counterRot}deg)`;
+  sunEmoji.style.transform = `rotate(${counterRot}deg)`;
+
+  // Update data cells
+  document.getElementById('valAzimuth').textContent = sol.azimuth.toFixed(1) + '°';
+  document.getElementById('valElevation').textContent =
+    (belowHorizon ? '↓' : '') + sol.elevation.toFixed(1) + '°';
+  document.getElementById('valCamera').textContent =
+    state.orientationReady ? state.cameraAzimuth.toFixed(0) + '°' : '---°';
+
+  // Color elevation value
+  const elEl = document.getElementById('valElevation');
+  elEl.style.color = belowHorizon ? 'var(--text-dim)' : 'var(--solar)';
+}
+
+// =============================================
+// ECLIPSE MODE
+// =============================================
+
+function setEclipseMode(idx) {
+  state.mode = 'eclipse';
+  state.eclipseDate = ECLIPSES[idx].date;
+
+  [0,1,2].forEach(i => document.getElementById('tab'+i).classList.remove('active'));
+  document.getElementById('tab'+idx).classList.add('active');
+
+  const badge = document.getElementById('modeBadge');
+  badge.textContent = ECLIPSES[idx].label;
+  badge.className = 'mode-badge eclipse-mode';
+}
+
+function resetToRealtime() {
+  state.mode = 'realtime';
+  state.eclipseDate = null;
+  [0,1,2].forEach(i => document.getElementById('tab'+i).classList.remove('active'));
+  const badge = document.getElementById('modeBadge');
+  badge.textContent = 'TIEMPO REAL';
+  badge.className = 'mode-badge realtime';
+}
+
+// =============================================
+// DRAW AZIMUTH TICKS
+// =============================================
+
+function drawTicks() {
+  const svg = document.getElementById('azimuthTicks');
+  let html = '';
+  for (let deg = 0; deg < 360; deg += 10) {
+    const angle = toRad(deg - 90);
+    const r1 = 155, r2 = deg % 30 === 0 ? 143 : 149;
+    const x1 = 170 + r1 * Math.cos(angle);
+    const y1 = 170 + r1 * Math.sin(angle);
+    const x2 = 170 + r2 * Math.cos(angle);
+    const y2 = 170 + r2 * Math.sin(angle);
+    const stroke = deg % 90 === 0 ? '#4a5a6a' : '#2a3540';
+    html += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${stroke}" stroke-width="1.5"/>`;
+  }
+  svg.innerHTML = html;
+}
+
+drawTicks();
+</script>
+</body>
+</html>
