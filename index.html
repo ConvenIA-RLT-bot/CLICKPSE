@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clickpse</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --solar: #ffb700;
+  --solar-soft: rgba(255,183,0,0.15);
+  --eclipse: #ff4500;
+  --eclipse-soft: rgba(255,69,0,0.12);
+  --green: #00e5a0;
+  --green-soft: rgba(0,229,160,0.12);
+  --text: #ddeeff;
+  --text-dim: rgba(200,220,240,0.4);
+  --bg: #060810;
+  --surface: rgba(6,8,16,0.85);
+  --border: rgba(255,255,255,0.07);
+  --mono: 'Share Tech Mono', monospace;
+  --display: 'Orbitron', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+/* ── CAMERA LAYER ── */
+#video {
+  position: fixed;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1s;
+}
+#video.active { opacity: 1; }
+
+/* dark vignette over camera */
+#vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(6,8,16,0.7) 100%),
+    linear-gradient(to bottom, rgba(6,8,16,0.5) 0%, transparent 20%, transparent 75%, rgba(6,8,16,0.8) 100%);
+  pointer-events: none;
+}
+
+/* ── UI LAYER ── */
+#ui {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+/* HEADER */
+#header {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  background: linear-gradient(to bottom, rgba(6,8,16,0.9), transparent);
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--solar);
+  text-shadow: 0 0 24px rgba(255,183,0,0.6), 0 0 60px rgba(255,183,0,0.2);
+}
+.logo em { color: var(--eclipse); font-style: normal; }
+
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+#modeBadge {
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 3px 10px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid rgba(0,229,160,0.25);
+  transition: all 0.3s;
+}
+#modeBadge.eclipse {
+  background: var(--eclipse-soft);
+  color: var(--eclipse);
+  border-color: rgba(255,69,0,0.3);
+}
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-dim);
+  transition: all 0.5s;
+}
+.dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2.5s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── COMPASS CANVAS AREA ── */
+#compassWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+#compassCanvas {
+  position: absolute;
+  /* sized by JS */
+}
+
+/* center reticle */
+#reticle {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px; height: 60px;
+  pointer-events: none;
+}
+#reticle::before, #reticle::after {
+  content: '';
+  position: absolute;
+  background: var(--green);
+  opacity: 0.7;
+}
+#reticle::before { width: 1px; height: 60px; left: 50%; top: 0; }
+#reticle::after  { width: 60px; height: 1px; left: 0; top: 50%; }
+
+.reticle-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+/* ── DATA BAR ── */
+#dataBar {
+  pointer-events: all;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  background-color: rgba(6,8,16,0.75);
+}
+
+.dcell {
+  padding: 10px 8px;
+  text-align: center;
+  background: rgba(6,8,16,0.5);
+}
+.dlabel {
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.dval {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--solar);
+  letter-spacing: 1px;
+}
+.dval.green { color: var(--green); }
+.dval.dim   { color: var(--text-dim); font-size: 13px; }
+
+/* ── ECLIPSE STRIP ── */
+#eclipseStrip {
+  pointer-events: all;
+  padding: 10px 14px;
+  backdrop-filter: blur(20px);
+  background: rgba(6,8,16,0.75);
+}
+
+.strip-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.etabs { display: flex; gap: 6px; }
+
+.etab {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 4px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+.etab:active { transform: scale(0.95); }
+.etab.on {
+  border-color: var(--eclipse);
+  color: var(--eclipse);
+  background: var(--eclipse-soft);
+  box-shadow: 0 0 14px rgba(255,69,0,0.2);
+}
+.etab .edate { font-size: 11px; font-weight: bold; margin-bottom: 2px; letter-spacing: 0.5px; }
+.etab .etype { font-size: 9px; opacity: 0.6; }
+
+/* ── BOTTOM BAR ── */
+#bottomBar {
+  pointer-events: all;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 14px;
+  backdrop-filter: blur(20px);
+  background: linear-gradient(to top, rgba(6,8,16,0.9), transparent);
+}
+
+#locLabel { font-size: 10px; color: var(--text-dim); }
+
+.btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.btn:active { border-color: var(--green); color: var(--green); }
+
+/* ── OVERLAY ── */
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 36px 28px;
+  text-align: center;
+}
+#overlay.gone { display: none; }
+
+.ov-logo {
+  font-family: var(--display);
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: var(--solar);
+  text-shadow: 0 0 30px rgba(255,183,0,0.5);
+}
+.ov-logo em { color: var(--eclipse); font-style: normal; }
+
+.ov-icon { font-size: 52px; animation: spin 20s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ov-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-width: 290px;
+}
+
+.ov-btn {
+  background: var(--solar);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 14px 36px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  max-width: 280px;
+}
+.ov-btn:active { opacity: 0.85; transform: scale(0.97); }
+
+.ov-btn.sec {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 10px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+}
+
+/* scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
+  );
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<div id="vignette"></div>
+
+<!-- COMPASS CANVAS -->
+<div id="ui">
+  <div id="header">
+    <div class="logo">CLICK<em>PSE</em></div>
+    <div class="header-right">
+      <div id="modeBadge">TIEMPO REAL</div>
+      <div class="dot" id="dot"></div>
+    </div>
+  </div>
+
+  <div id="compassWrap">
+    <canvas id="compassCanvas"></canvas>
+    <div id="reticle"><div class="reticle-dot"></div></div>
+  </div>
+
+  <div id="dataBar">
+    <div class="dcell">
+      <div class="dlabel">AZIMUT SOL</div>
+      <div class="dval" id="vAz">---°</div>
+    </div>
+    <div class="dcell">
+      <div class="dlabel">ELEVACIÓN</div>
+      <div class="dval" id="vEl">---°</div>
+    </div>
+    <div class="dcell">
+      <div class="dlabel">CÁMARA</div>
+      <div class="dval green" id="vCam">---°</div>
+    </div>
+  </div>
+
+  <div id="eclipseStrip">
+    <div class="strip-label">▸ Eclipses desde Mallorca</div>
+    <div class="etabs">
+      <div class="etab" id="e0" onclick="setEclipse(0)">
+        <div class="edate">12 AGO 2026</div>
+        <div class="etype">Total ◉</div>
+      </div>
+      <div class="etab" id="e1" onclick="setEclipse(1)">
+        <div class="edate">02 AGO 2027</div>
+        <div class="etype">Total ◉</div>
+      </div>
+      <div class="etab" id="e2" onclick="setEclipse(2)">
+        <div class="edate">26 ENE 2028</div>
+        <div class="etype">Anular ◎</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottomBar">
+    <div id="locLabel">📍 Buscando...</div>
+    <button class="btn" onclick="resetNow()">⟳ AHORA</button>
+  </div>
+</div>
+
+<!-- PERMISSION OVERLAY -->
+<div id="overlay">
+  <div class="ov-icon">🌑</div>
+  <div class="ov-logo">CLICK<em>PSE</em></div>
+  <div class="ov-text">
+    Necesito acceso a tu <strong style="color:var(--text)">cámara</strong>, <strong style="color:var(--text)">ubicación</strong> y <strong style="color:var(--text)">orientación</strong> para mostrarte dónde apuntar el día del eclipse.
+  </div>
+  <button class="ov-btn" onclick="init()">ACTIVAR</button>
+  <button class="ov-btn sec" onclick="initManual()">Sin cámara / manual</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// SOLAR ALGORITHM  (NOAA simplified)
+// ═══════════════════════════════════════════
+const RAD = Math.PI/180, DEG = 180/Math.PI;
+const r = d => d*RAD, d = r => r*DEG;
+
+function sunPosition(date, lat, lon) {
+  const JD = date/86400000 + 2440587.5;
+  const n  = JD - 2451545.0;
+  const L  = (280.460 + 0.9856474*n) % 360;
+  const g  = r((357.528 + 0.9856003*n) % 360);
+  const lam= r(L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const eps= r(23.439 - 0.0000004*n);
+  const sinDec = Math.sin(eps)*Math.sin(lam);
+  const dec    = Math.asin(Math.max(-1,Math.min(1,sinDec)));
+  const UT  = (date % 86400000)/3600000;
+  const GMST= (6.697375 + 0.0657098242*n + UT) % 24;
+  const LMST= (GMST + lon/15 + 48) % 24;
+  const RA  = d(Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam)))/15;
+  const HA  = r(((LMST - ((RA%24+24)%24)) * 15));
+  const latR= r(lat);
+  const sinAlt = Math.sin(latR)*Math.sin(dec) + Math.cos(latR)*Math.cos(dec)*Math.cos(HA);
+  const alt = d(Math.asin(Math.max(-1,Math.min(1,sinAlt))));
+  const cosAz  = (Math.sin(dec) - Math.sin(latR)*sinAlt) / (Math.cos(latR)*Math.cos(r(alt)));
+  let az = d(Math.acos(Math.max(-1,Math.min(1,cosAz))));
+  if (Math.sin(HA) > 0) az = 360 - az;
+  return { az, alt };
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const S = {
+  lat: 39.6953, lon: 2.9216,
+  gpsReady: false,
+  camAz: 0,       // camera heading (degrees from N, clockwise)
+  camPitch: 0,    // camera tilt up from horizon
+  orReady: false,
+  mode: 'realtime',
+  eclipseDate: null,
+};
+
+const ECLIPSES = [
+  { date: new Date('2026-08-12T17:47:00Z'), label:'12 AGO 2026' },
+  { date: new Date('2027-08-02T10:07:00Z'), label:'02 AGO 2027' },
+  { date: new Date('2028-01-26T15:08:00Z'), label:'26 ENE 2028' },
+];
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  document.getElementById('overlay').classList.add('gone');
+
+  // Camera
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} },
+      audio: false
+    });
+    const vid = document.getElementById('video');
+    vid.srcObject = stream;
+    vid.onloadedmetadata = () => { vid.classList.add('active'); };
+  } catch(e) {
+    console.warn('Camera denied:', e);
+  }
+
+  startSensors();
+}
+
+function initManual() {
+  document.getElementById('overlay').classList.add('gone');
+  S.gpsReady = true;
+  document.getElementById('locLabel').textContent = '📍 Mallorca (manual)';
+  startSensors();
+}
+
+function startSensors() {
+  // GPS
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(p => {
+      S.lat = p.coords.latitude;
+      S.lon = p.coords.longitude;
+      S.gpsReady = true;
+      document.getElementById('dot').classList.add('on');
+      document.getElementById('locLabel').textContent =
+        `📍 ${S.lat.toFixed(3)}°N ${S.lon.toFixed(3)}°E`;
+    }, ()=>{
+      S.gpsReady = true;
+      document.getElementById('locLabel').textContent = '📍 Mallorca (aprox.)';
+    }, { enableHighAccuracy:true, maximumAge:20000 });
+  }
+
+  // Orientation
+  const handler = evt => {
+    let alpha = evt.alpha;
+    if (typeof evt.webkitCompassHeading === 'number') alpha = evt.webkitCompassHeading;
+    if (alpha === null || alpha === undefined) return;
+    S.camAz = (alpha + 360) % 360;
+    if (evt.beta !== null) S.camPitch = 90 - Math.abs(evt.beta ?? 90);
+    S.orReady = true;
+  };
+
+  if (typeof DeviceOrientationEvent !== 'undefined') {
+    window.addEventListener('deviceorientationabsolute', handler, true);
+    window.addEventListener('deviceorientation', handler, true);
+  }
+
+  loop();
+}
+
+// ═══════════════════════════════════════════
+// COMPASS CANVAS RENDERER
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('compassCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  const wrap = document.getElementById('compassWrap');
+  const size = Math.min(wrap.clientWidth, wrap.clientHeight) * 0.92;
+  canvas.width  = size;
+  canvas.height = size;
+  canvas.style.width  = size + 'px';
+  canvas.style.height = size + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+function drawCompass(sol) {
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const R  = W * 0.46;   // outer ring radius
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── rotate entire compass to align with camera heading ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(r(-S.camAz));  // counter-rotate so N stays where we're looking
+  ctx.translate(-cx, -cy);
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Elevation rings
+  [22, 45, 67, 90].forEach(el => {
+    const rr = R * (1 - el/90);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Horizon line
+  ctx.beginPath();
+  ctx.moveTo(cx - R, cy);
+  ctx.lineTo(cx + R, cy);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Degree ticks
+  for (let deg = 0; deg < 360; deg += 5) {
+    const ang = r(deg - 90);
+    const len = deg % 30 === 0 ? 14 : deg % 10 === 0 ? 9 : 5;
+    const r1 = R, r2 = R - len;
+    ctx.beginPath();
+    ctx.moveTo(cx + r1*Math.cos(ang), cy + r1*Math.sin(ang));
+    ctx.lineTo(cx + r2*Math.cos(ang), cy + r2*Math.sin(ang));
+    ctx.strokeStyle = deg % 90 === 0
+      ? 'rgba(255,255,255,0.35)'
+      : deg % 30 === 0
+        ? 'rgba(255,255,255,0.18)'
+        : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = deg % 90 === 0 ? 2 : 1;
+    ctx.stroke();
+  }
+
+  // Cardinal labels — drawn WITHOUT rotation (absolute)
+  const cardinals = [
+    { label:'N', deg:0,   color:'#ff4500' },
+    { label:'E', deg:90,  color:'rgba(200,220,240,0.7)' },
+    { label:'S', deg:180, color:'rgba(200,220,240,0.7)' },
+    { label:'O', deg:270, color:'rgba(200,220,240,0.7)' },
+  ];
+  ctx.font = `bold ${W*0.052}px Orbitron, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  cardinals.forEach(c => {
+    const ang = r(c.deg - 90);
+    const rr  = R - 22;
+    const x   = cx + rr * Math.cos(ang);
+    const y   = cy + rr * Math.sin(ang);
+    // counter-rotate the label so it stays upright
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(r(S.camAz));
+    ctx.fillStyle = c.color;
+    ctx.fillText(c.label, 0, 0);
+    ctx.restore();
+  });
+
+  // Degree numbers at 30° intervals
+  ctx.font = `${W*0.026}px Share Tech Mono, monospace`;
+  ctx.fillStyle = 'rgba(200,220,240,0.25)';
+  [30,60,120,150,210,240,300,330].forEach(deg => {
+    const ang = r(deg - 90);
+    const rr  = R - 20;
+    const x   = cx + rr * Math.cos(ang);
+    const y   = cy + rr * Math.sin(ang);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(r(S.camAz));
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(deg + '°', 0, 0);
+    ctx.restore();
+  });
+
+  ctx.restore(); // end compass rotation
+
+  // ── SUN (absolute position, no compass rotation) ──
+  const { x: sx, y: sy } = solToXY(sol.az, sol.alt, cx, cy, R);
+  const below = sol.alt < 0;
+
+  if (!below) {
+    // glow
+    const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, 36);
+    grd.addColorStop(0, 'rgba(255,183,0,0.35)');
+    grd.addColorStop(1, 'rgba(255,183,0,0)');
+    ctx.beginPath();
+    ctx.arc(sx, sy, 36, 0, Math.PI*2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    // pulse ring
+    const t = Date.now() / 1000;
+    const pr = 14 + 4 * Math.sin(t * 2);
+    ctx.beginPath();
+    ctx.arc(sx, sy, pr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,183,0,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // sun disc
+  ctx.beginPath();
+  ctx.arc(sx, sy, 11, 0, Math.PI*2);
+  ctx.fillStyle = below ? '#4a3200' : '#ffb700';
+  ctx.globalAlpha = below ? 0.35 : 1;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // sun emoji
+  ctx.font = '13px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = below ? 0.3 : 1;
+  ctx.fillText('☀', sx, sy + 1);
+  ctx.globalAlpha = 1;
+
+  // dashed line from center to sun
+  if (!below) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(sx, sy);
+    ctx.strokeStyle = 'rgba(255,183,0,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ── CAMERA DIRECTION indicator (triangle at top, absolute) ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  // no rotation — arrow always points up (where camera faces)
+  const arrR = R - 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -arrR);
+  ctx.lineTo(-7, -arrR + 16);
+  ctx.lineTo(7, -arrR + 16);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,229,160,0.7)';
+  ctx.fill();
+  ctx.restore();
+
+  // delta angle indicator (angular distance sun ↔ camera)
+  if (S.orReady && !below) {
+    const delta = angleDiff(sol.az, S.camAz);
+    const absDelta = Math.abs(delta);
+    const color = absDelta < 10 ? '#00e5a0' : absDelta < 30 ? '#ffb700' : '#ff4500';
+    ctx.font = `bold ${W*0.04}px Orbitron, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = color;
+    const arrow = delta > 0 ? '→' : '←';
+    ctx.fillText(`${arrow} ${absDelta.toFixed(0)}°`, cx, cy + R + 10);
+  }
+}
+
+function solToXY(az, alt, cx, cy, R) {
+  // elevation 0° → edge, 90° → center
+  const clampedAlt = Math.max(-85, Math.min(90, alt));
+  const rr = R * (1 - (clampedAlt + 0) / 90);
+  const ang = r(az - 90); // SVG convention: 0=right
+  return {
+    x: cx + rr * Math.cos(ang),
+    y: cy + rr * Math.sin(ang),
+  };
+}
+
+function angleDiff(a, b) {
+  let d = ((a - b) + 540) % 360 - 180;
+  return d;
+}
+
+// ═══════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════
+function loop() {
+  const now = S.mode === 'realtime' ? new Date() : S.eclipseDate;
+  const sol = sunPosition(now, S.lat, S.lon);
+
+  drawCompass(sol);
+
+  document.getElementById('vAz').textContent  = sol.az.toFixed(1) + '°';
+  const elStr = (sol.alt < 0 ? '↓' : '') + sol.alt.toFixed(1) + '°';
+  const elEl  = document.getElementById('vEl');
+  elEl.textContent = elStr;
+  elEl.style.color = sol.alt < 0 ? 'rgba(200,220,240,0.3)' : 'var(--solar)';
+
+  const camEl = document.getElementById('vCam');
+  camEl.textContent = S.orReady ? S.camAz.toFixed(0) + '°' : '---°';
+
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════
+// ECLIPSE MODE
+// ═══════════════════════════════════════════
+function setEclipse(i) {
+  S.mode = 'eclipse';
+  S.eclipseDate = ECLIPSES[i].date;
+  [0,1,2].forEach(j => document.getElementById('e'+j).classList.remove('on'));
+  document.getElementById('e'+i).classList.add('on');
+  const b = document.getElementById('modeBadge');
+  b.textContent = ECLIPSES[i].label;
+  b.className = 'eclipse';
+}
+
+function resetNow() {
+  S.mode = 'realtime';
+  [0,1,2].forEach(j => document.getElementById('e'+j).classList.remove('on'));
+  const b = document.getElementById('modeBadge');
+  b.textContent = 'TIEMPO REAL';
+  b.className = '';
+}
+</script>
+</body>
+</html>
