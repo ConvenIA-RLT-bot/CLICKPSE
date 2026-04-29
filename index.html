@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clickpse</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --solar: #ffb700;
+  --solar-soft: rgba(255,183,0,0.15);
+  --eclipse: #ff4500;
+  --eclipse-soft: rgba(255,69,0,0.12);
+  --green: #00e5a0;
+  --green-soft: rgba(0,229,160,0.12);
+  --text: #ddeeff;
+  --text-dim: rgba(200,220,240,0.4);
+  --bg: #060810;
+  --border: rgba(255,255,255,0.07);
+  --mono: 'Share Tech Mono', monospace;
+  --display: 'Orbitron', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+#video {
+  position: fixed;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1s;
+}
+#video.active { opacity: 1; }
+
+#vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(6,8,16,0.55) 100%),
+    linear-gradient(to bottom, rgba(6,8,16,0.45) 0%, transparent 18%, transparent 82%, rgba(6,8,16,0.85) 100%);
+  pointer-events: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+#header {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+  background: linear-gradient(to bottom, rgba(6,8,16,0.85), transparent);
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: clamp(20px, 5.5vw, 26px);
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--solar);
+  text-shadow: 0 0 20px rgba(255,183,0,0.5);
+}
+.logo em { color: var(--eclipse); font-style: normal; }
+
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+#modeBadge {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  padding: 3px 9px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--green-soft);
+  color: var(--green);
+  border: 1px solid rgba(0,229,160,0.25);
+}
+#modeBadge.eclipse {
+  background: var(--eclipse-soft);
+  color: var(--eclipse);
+  border-color: rgba(255,69,0,0.3);
+}
+
+.icon-btn {
+  background: rgba(6,8,16,0.6);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:active { color: var(--green); border-color: var(--green); }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-dim);
+}
+.dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2.5s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+#compassWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 0;
+}
+
+#compassCanvas { position: absolute; }
+
+#reticle {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px; height: 56px;
+  pointer-events: none;
+}
+#reticle::before, #reticle::after {
+  content: '';
+  position: absolute;
+  background: var(--green);
+  opacity: 0.7;
+}
+#reticle::before { width: 1px; height: 56px; left: 50%; top: 0; }
+#reticle::after  { width: 56px; height: 1px; left: 0; top: 50%; }
+
+.reticle-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+#trajToggle {
+  position: absolute;
+  top: 8px; left: 8px;
+  z-index: 5;
+  pointer-events: all;
+  background: rgba(6,8,16,0.7);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 5px 9px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+#trajToggle.on {
+  border-color: var(--solar);
+  color: var(--solar);
+  background: rgba(255,183,0,0.08);
+}
+
+#dataBar {
+  pointer-events: all;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  background-color: rgba(6,8,16,0.78);
+}
+
+.dcell {
+  padding: 9px 4px;
+  text-align: center;
+  background: rgba(6,8,16,0.5);
+  min-width: 0;
+}
+.dlabel {
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.dval {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--solar);
+  letter-spacing: 0.5px;
+  font-size: clamp(13px, 4vw, 17px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dval.green { color: var(--green); }
+
+#eclipseStrip {
+  pointer-events: all;
+  padding: 8px 12px 6px;
+  backdrop-filter: blur(20px);
+  background: rgba(6,8,16,0.78);
+}
+
+.strip-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.etabs { display: flex; gap: 5px; }
+
+.etab {
+  flex: 1;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 3px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  position: relative;
+}
+.etab:active { transform: scale(0.95); }
+.etab.on {
+  border-color: var(--marker, #ff4500);
+  color: var(--marker, #ff4500);
+  background: rgba(255,69,0,0.08);
+  box-shadow: 0 0 10px rgba(255,69,0,0.2);
+}
+.etab .edate { font-size: 10px; font-weight: bold; margin-bottom: 1px; letter-spacing: 0.5px; }
+.etab .etype { font-size: 8px; opacity: 0.6; }
+.etab::before {
+  content: '';
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--marker, #ff4500);
+  box-shadow: 0 0 6px var(--marker, #ff4500);
+  opacity: 0.5;
+}
+.etab.on::before { opacity: 1; }
+
+#shutterWrap {
+  pointer-events: all;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 0 4px;
+}
+
+#shutter {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.92);
+  border: 4px solid rgba(255,255,255,0.4);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.12), 0 4px 20px rgba(0,0,0,0.5);
+  cursor: pointer;
+  outline: none;
+}
+#shutter:active { transform: scale(0.91); }
+
+#bottomBar {
+  pointer-events: all;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 14px 12px;
+  backdrop-filter: blur(20px);
+  background: linear-gradient(to top, rgba(6,8,16,0.9), transparent);
+}
+
+#locLabel { font-size: 10px; color: var(--text-dim); }
+
+.btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 5px 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.btn:active { border-color: var(--green); color: var(--green); }
+
+/* ── LANDSCAPE ── */
+@media (orientation: landscape) and (max-height: 600px) {
+  #ui { flex-direction: row; }
+
+  #header {
+    flex-direction: column;
+    width: 76px;
+    padding: 10px 6px;
+    border-right: 1px solid var(--border);
+    background: rgba(6,8,16,0.78);
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    backdrop-filter: blur(20px);
+  }
+
+  .logo { font-size: 16px; letter-spacing: 1.5px; }
+
+  .header-right { flex-direction: column; gap: 8px; }
+
+  #compassWrap { flex: 1; }
+
+  #rightCol {
+    pointer-events: all;
+    display: flex !important;
+    flex-direction: column;
+    width: 116px;
+    border-left: 1px solid var(--border);
+    background: rgba(6,8,16,0.82);
+    backdrop-filter: blur(20px);
+  }
+
+  #dataBar {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(0, 1fr);
+    border: none;
+    background: transparent;
+  }
+
+  .dcell { padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .dlabel { font-size: 7px; }
+  .dval { font-size: clamp(12px, 3vw, 15px); }
+
+  #eclipseStrip { padding: 6px 6px; }
+  .etabs { flex-direction: column; gap: 3px; }
+  .etab { padding: 5px 3px; }
+  .etab .edate { font-size: 9px; }
+  .etab .etype { font-size: 7px; }
+
+  #shutterWrap { padding: 6px 0; border-top: 1px solid var(--border); }
+  #shutter { width: 50px; height: 50px; border-width: 3px; }
+
+  #bottomBar {
+    padding: 5px 6px;
+    flex-direction: column;
+    gap: 5px;
+    border-top: 1px solid var(--border);
+  }
+
+  #locLabel { font-size: 9px; text-align: center; }
+  .btn { font-size: 9px; padding: 4px 6px; }
+}
+
+#rightCol { display: contents; }
+
+/* ── CALIBRATION ── */
+#calibOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(6,8,16,0.96);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 20px;
+  text-align: center;
+  overflow-y: auto;
+}
+#calibOverlay.visible { display: flex; }
+
+.calib-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--green);
+}
+
+.calib-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+.calib-row {
+  display: flex; gap: 10px; align-items: center;
+  font-family: var(--mono);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.calib-current {
+  font-family: var(--display);
+  font-size: 24px;
+  color: var(--green);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.calib-stats {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  background: rgba(255,255,255,0.03);
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.nudge-row { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+
+.nudge-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  min-width: 44px;
+}
+.nudge-btn:active { background: var(--green-soft); border-color: var(--green); }
+.nudge-btn.on { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+
+.calib-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+.calib-btn {
+  background: var(--green);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 10px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.calib-btn:active { transform: scale(0.96); }
+.calib-btn.sec {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.calib-btn.warn {
+  background: transparent;
+  border: 1px solid rgba(255,69,0,0.4);
+  color: var(--eclipse);
+}
+
+/* ── PERMISSION ── */
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 24px;
+  text-align: center;
+}
+#overlay.gone { display: none; }
+
+.ov-logo {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: var(--solar);
+  text-shadow: 0 0 30px rgba(255,183,0,0.5);
+}
+.ov-logo em { color: var(--eclipse); font-style: normal; }
+
+.ov-icon { font-size: 46px; animation: spin 20s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ov-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-width: 290px;
+}
+
+.ov-btn {
+  background: var(--solar);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 13px 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  max-width: 270px;
+}
+.ov-btn:active { opacity: 0.85; transform: scale(0.97); }
+.ov-btn.sec {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 9px;
+  font-family: var(--mono);
+}
+
+/* ── FLASH & PREVIEW ── */
+#flashOverlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: white; opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.05s;
+}
+#flashOverlay.flash { opacity: 0.7; }
+
+#previewModal {
+  position: fixed; inset: 0;
+  z-index: 200;
+  background: rgba(6,8,16,0.97);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px;
+}
+#previewModal.visible { display: flex; }
+
+#previewImg {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+
+.modal-btns { display: flex; gap: 10px; width: 100%; max-width: 380px; }
+
+.modal-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  border: none;
+}
+.modal-btn:active { transform: scale(0.96); }
+.modal-btn.save { background: var(--solar); color: #000; }
+.modal-btn.discard {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+#captureCanvas { display: none; }
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
+  );
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<div id="vignette"></div>
+
+<div id="ui">
+  <div id="header">
+    <div class="logo">CLICK<em>PSE</em></div>
+    <div class="header-right">
+      <div id="modeBadge">TIEMPO REAL</div>
+      <button class="icon-btn" onclick="openCalib()" aria-label="Calibrar">⚙</button>
+      <div class="dot" id="dot"></div>
+    </div>
+  </div>
+
+  <div id="compassWrap">
+    <button id="trajToggle" class="on" onclick="toggleTraj()">◠ TRAY</button>
+    <canvas id="compassCanvas"></canvas>
+    <div id="reticle"><div class="reticle-dot"></div></div>
+  </div>
+
+  <div id="rightCol">
+    <div id="dataBar">
+      <div class="dcell"><div class="dlabel">AZIMUT</div><div class="dval" id="vAz">---°</div></div>
+      <div class="dcell"><div class="dlabel">ELEV</div><div class="dval" id="vEl">---°</div></div>
+      <div class="dcell"><div class="dlabel">CÁMARA</div><div class="dval green" id="vCam">---°</div></div>
+    </div>
+
+    <div id="eclipseStrip">
+      <div class="strip-label">▸ Eclipses (toca para mostrar en encuadre)</div>
+      <div class="etabs">
+        <div class="etab" id="e0" onclick="toggleEclipse(0)" style="--marker:#ff4500">
+          <div class="edate">12 AGO 2026</div>
+          <div class="etype">Total ◉</div>
+        </div>
+        <div class="etab" id="e1" onclick="toggleEclipse(1)" style="--marker:#ff8800">
+          <div class="edate">02 AGO 2027</div>
+          <div class="etype">Total ◉</div>
+        </div>
+        <div class="etab" id="e2" onclick="toggleEclipse(2)" style="--marker:#ffcc00">
+          <div class="edate">26 ENE 2028</div>
+          <div class="etype">Anular ◎</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="shutterWrap">
+      <button id="shutter" onclick="capturePhoto()" aria-label="Disparar"></button>
+    </div>
+
+    <div id="bottomBar">
+      <div id="locLabel">📍 Buscando...</div>
+      <button class="btn" onclick="resetNow()">⟳ AHORA</button>
+    </div>
+  </div>
+</div>
+
+<div id="flashOverlay"></div>
+<canvas id="captureCanvas"></canvas>
+
+<div id="previewModal">
+  <img id="previewImg" alt="Captura"/>
+  <div class="modal-btns">
+    <button class="modal-btn save" onclick="savePhoto()">⬇ GUARDAR</button>
+    <button class="modal-btn discard" onclick="discardPhoto()">DESCARTAR</button>
+  </div>
+</div>
+
+<div id="calibOverlay">
+  <div class="calib-title">⚙ CALIBRACIÓN</div>
+  <div class="calib-text">
+    El sensor magnético de Android lleva error variable. Apunta al sol y pulsa "AL SOL", o ajusta a mano con −/+. Se guarda automáticamente.
+  </div>
+  <div class="calib-row">
+    Crudo: <span id="cRaw" style="color:var(--text-dim);font-family:var(--display);font-size:18px;">---°</span>
+  </div>
+  <div class="calib-row">
+    Corregido: <span id="cFinal" class="calib-current">---°</span>
+  </div>
+  <div class="calib-row">
+    Offset: <span id="cOffset" style="color:var(--solar);font-family:var(--display);font-weight:700">0°</span>
+  </div>
+
+  <div class="nudge-row">
+    <button class="nudge-btn" onclick="nudgeOffset(-5)">−5°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(-1)">−1°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(1)">+1°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(5)">+5°</button>
+  </div>
+
+  <div class="calib-stats">
+    Histéresis (factor <span id="hystVal">8</span>) — más alto = más suave, más lento
+    <div class="nudge-row" style="margin-top:6px;">
+      <button class="nudge-btn" id="h2" onclick="setHyst(2)">2</button>
+      <button class="nudge-btn" id="h5" onclick="setHyst(5)">5</button>
+      <button class="nudge-btn" id="h8" onclick="setHyst(8)">8</button>
+      <button class="nudge-btn" id="h15" onclick="setHyst(15)">15</button>
+    </div>
+  </div>
+
+  <div class="calib-buttons">
+    <button class="calib-btn" onclick="autoCalibSun()">☀ AL SOL</button>
+    <button class="calib-btn warn" onclick="resetCalib()">RESET</button>
+    <button class="calib-btn sec" onclick="closeCalib()">CERRAR</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="ov-icon">🌑</div>
+  <div class="ov-logo">CLICK<em>PSE</em></div>
+  <div class="ov-text">
+    v0.5 — brújula astronómica con trayectoria solar, marcadores de eclipses en encuadre, modo landscape y calibración manual.
+  </div>
+  <button class="ov-btn" onclick="init()">ACTIVAR</button>
+  <button class="ov-btn sec" onclick="initManual()">Sin cámara / manual</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// SOLAR ALGORITHM (NOAA)
+// ═══════════════════════════════════════════
+const RAD = Math.PI/180, DEG = 180/Math.PI;
+const r = x => x*RAD;
+const d = x => x*DEG;
+
+function sunPosition(date, lat, lon) {
+  const JD = date/86400000 + 2440587.5;
+  const n  = JD - 2451545.0;
+  const L  = (280.460 + 0.9856474*n) % 360;
+  const g  = r((357.528 + 0.9856003*n) % 360);
+  const lam= r(L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const eps= r(23.439 - 0.0000004*n);
+  const sinDec = Math.sin(eps)*Math.sin(lam);
+  const dec    = Math.asin(Math.max(-1,Math.min(1,sinDec)));
+  const UT  = (date % 86400000)/3600000;
+  const GMST= (6.697375 + 0.0657098242*n + UT) % 24;
+  const LMST= (GMST + lon/15 + 48) % 24;
+  const RA  = d(Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam)))/15;
+  const HA  = r(((LMST - ((RA%24+24)%24)) * 15));
+  const latR= r(lat);
+  const sinAlt = Math.sin(latR)*Math.sin(dec) + Math.cos(latR)*Math.cos(dec)*Math.cos(HA);
+  const alt = d(Math.asin(Math.max(-1,Math.min(1,sinAlt))));
+  const cosAz  = (Math.sin(dec) - Math.sin(latR)*sinAlt) / (Math.cos(latR)*Math.cos(r(alt)));
+  let az = d(Math.acos(Math.max(-1,Math.min(1,cosAz))));
+  if (Math.sin(HA) > 0) az = 360 - az;
+  return { az, alt };
+}
+
+function sunTrajectory(date, lat, lon) {
+  const start = new Date(date);
+  start.setHours(0,0,0,0);
+  const points = [];
+  for (let m = 0; m < 24*60; m += 15) {
+    const t = new Date(start.getTime() + m*60000);
+    const p = sunPosition(t, lat, lon);
+    points.push({ az: p.az, alt: p.alt, t });
+  }
+  return points;
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const S = {
+  lat: 39.6953, lon: 2.9216,
+  gpsReady: false,
+  camAzRaw: 0,
+  camAz: 0,
+  camPitch: 0,
+  orReady: false,
+  hystFactor: 8,
+  compassOffset: 0,
+  showTraj: true,
+  showEclipse: [false, false, false],
+};
+
+try {
+  const saved = JSON.parse(localStorage.getItem('clickpse_calib') || '{}');
+  if (typeof saved.offset === 'number') S.compassOffset = saved.offset;
+  if (typeof saved.hyst === 'number')   S.hystFactor    = saved.hyst;
+} catch(e) {}
+
+const ECLIPSES = [
+  { date: new Date('2026-08-12T17:47:00Z'), label:'12 AGO 2026', color: '#ff4500' },
+  { date: new Date('2027-08-02T10:07:00Z'), label:'02 AGO 2027', color: '#ff8800' },
+  { date: new Date('2028-01-26T15:08:00Z'), label:'26 ENE 2028', color: '#ffcc00' },
+];
+
+function saveCalib() {
+  localStorage.setItem('clickpse_calib', JSON.stringify({
+    offset: S.compassOffset, hyst: S.hystFactor,
+  }));
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  document.getElementById('overlay').classList.add('gone');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} },
+      audio: false
+    });
+    const vid = document.getElementById('video');
+    vid.srcObject = stream;
+    vid.onloadedmetadata = () => vid.classList.add('active');
+  } catch(e) { console.warn('Camera denied:', e); }
+  startSensors();
+}
+
+function initManual() {
+  document.getElementById('overlay').classList.add('gone');
+  S.gpsReady = true;
+  document.getElementById('locLabel').textContent = '📍 Mallorca (manual)';
+  startSensors();
+}
+
+function startSensors() {
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(p => {
+      S.lat = p.coords.latitude;
+      S.lon = p.coords.longitude;
+      S.gpsReady = true;
+      document.getElementById('dot').classList.add('on');
+      document.getElementById('locLabel').textContent =
+        `📍 ${S.lat.toFixed(3)}°N ${S.lon.toFixed(3)}°E`;
+    }, () => {
+      S.gpsReady = true;
+      document.getElementById('locLabel').textContent = '📍 Mallorca (aprox.)';
+    }, { enableHighAccuracy:true, maximumAge:20000 });
+  }
+
+  const handler = evt => {
+    let alpha = evt.alpha;
+    if (typeof evt.webkitCompassHeading === 'number') alpha = evt.webkitCompassHeading;
+    if (alpha === null || alpha === undefined) return;
+    S.camAzRaw = (alpha + 360) % 360;
+    if (evt.beta !== null) S.camPitch = 90 - Math.abs(evt.beta ?? 90);
+    S.orReady = true;
+  };
+
+  if (typeof DeviceOrientationEvent !== 'undefined') {
+    window.addEventListener('deviceorientationabsolute', handler, true);
+    window.addEventListener('deviceorientation', handler, true);
+  }
+
+  highlightHyst();
+  loop();
+}
+
+// ═══════════════════════════════════════════
+// HYSTERESIS — circular low-pass filter
+// ═══════════════════════════════════════════
+function smoothAngle(current, target, factor) {
+  let delta = ((target - current + 540) % 360) - 180;
+  return (current + delta / factor + 360) % 360;
+}
+
+function angleDiff(a, b) {
+  return ((a - b) + 540) % 360 - 180;
+}
+
+// ═══════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('compassCanvas');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  const wrap = document.getElementById('compassWrap');
+  const size = Math.min(wrap.clientWidth, wrap.clientHeight) * 0.94;
+  if (size <= 0) return;
+  canvas.width  = size;
+  canvas.height = size;
+  canvas.style.width  = size + 'px';
+  canvas.style.height = size + 'px';
+}
+window.addEventListener('resize', () => setTimeout(resize, 50));
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+setTimeout(resize, 100);
+
+function solToXY(az, alt, cx, cy, R) {
+  const clampedAlt = Math.max(-90, Math.min(90, alt));
+  const rr = R * (1 - clampedAlt / 90);
+  const ang = r(az - 90);
+  return { x: cx + rr*Math.cos(ang), y: cy + rr*Math.sin(ang) };
+}
+
+// ═══════════════════════════════════════════
+// COMPASS DRAW
+// ═══════════════════════════════════════════
+function drawCompass(sol) {
+  const W = canvas.width, H = canvas.height;
+  if (W === 0) return;
+  const cx = W/2, cy = H/2;
+  const R  = W * 0.46;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Rotated ring
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(r(-S.camAz));
+  ctx.translate(-cx, -cy);
+
+  // Outer ring
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Elevation rings
+  [22, 45, 67, 90].forEach(el => {
+    const rr = R * (1 - el/90);
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.setLineDash([3, 8]); ctx.stroke(); ctx.setLineDash([]);
+  });
+
+  // Horizon line
+  ctx.beginPath();
+  ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+  ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+  ctx.lineWidth = 1; ctx.stroke();
+
+  // Ticks
+  for (let deg = 0; deg < 360; deg += 5) {
+    const ang = r(deg - 90);
+    const len = deg % 30 === 0 ? 14 : deg % 10 === 0 ? 9 : 5;
+    ctx.beginPath();
+    ctx.moveTo(cx + R*Math.cos(ang), cy + R*Math.sin(ang));
+    ctx.lineTo(cx + (R-len)*Math.cos(ang), cy + (R-len)*Math.sin(ang));
+    ctx.strokeStyle = deg % 90 === 0 ? 'rgba(255,255,255,0.4)'
+                    : deg % 30 === 0 ? 'rgba(255,255,255,0.18)'
+                    : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = deg % 90 === 0 ? 2 : 1;
+    ctx.stroke();
+  }
+
+  // ── Solar trajectory (current day) ──
+  if (S.showTraj && S.gpsReady) {
+    const traj = sunTrajectory(new Date(), S.lat, S.lon);
+    drawTrajectory(traj, '#ffb700', 0.40, true);
+  }
+
+  // ── Eclipse trajectories ──
+  S.showEclipse.forEach((on, i) => {
+    if (!on) return;
+    const traj = sunTrajectory(ECLIPSES[i].date, S.lat, S.lon);
+    drawTrajectory(traj, ECLIPSES[i].color, 0.50, false);
+  });
+
+  // Cardinals (counter-rotated)
+  const cards = [
+    {l:'N', deg:0,   col:'#ff4500'},
+    {l:'E', deg:90,  col:'rgba(200,220,240,0.75)'},
+    {l:'S', deg:180, col:'rgba(200,220,240,0.75)'},
+    {l:'O', deg:270, col:'rgba(200,220,240,0.75)'},
+  ];
+  ctx.font = `bold ${W*0.052}px Orbitron, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  cards.forEach(c => {
+    const ang = r(c.deg - 90);
+    const rr = R - 22;
+    const x = cx + rr*Math.cos(ang), y = cy + rr*Math.sin(ang);
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(r(S.camAz));
+    ctx.fillStyle = c.col;
+    ctx.fillText(c.l, 0, 0);
+    ctx.restore();
+  });
+
+  // Degree numbers
+  ctx.font = `${W*0.026}px Share Tech Mono, monospace`;
+  [30,60,120,150,210,240,300,330].forEach(deg => {
+    const ang = r(deg - 90);
+    const rr = R - 20;
+    const x = cx + rr*Math.cos(ang), y = cy + rr*Math.sin(ang);
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(r(S.camAz));
+    ctx.fillStyle = 'rgba(200,220,240,0.25)';
+    ctx.fillText(deg + '°', 0, 0);
+    ctx.restore();
+  });
+
+  ctx.restore(); // end ring rotation
+
+  // ── Sun (current) ──
+  drawSunMarker(sol, cx, cy, R, '#ffb700');
+
+  // ── Eclipse markers ──
+  S.showEclipse.forEach((on, i) => {
+    if (!on) return;
+    const epos = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+    drawEclipseMarker(epos, cx, cy, R, ECLIPSES[i].color, ECLIPSES[i].label);
+  });
+
+  // ── Camera arrow at top ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  const arrR = R - 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -arrR);
+  ctx.lineTo(-7, -arrR + 16);
+  ctx.lineTo(7, -arrR + 16);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,229,160,0.75)';
+  ctx.fill();
+  ctx.restore();
+
+  // ── Delta indicator ──
+  if (S.orReady && sol.alt > -10) {
+    const delta = angleDiff(sol.az, S.camAz);
+    const absDelta = Math.abs(delta);
+    const color = absDelta < 10 ? '#00e5a0' : absDelta < 30 ? '#ffb700' : '#ff4500';
+    ctx.font = `bold ${W*0.038}px Orbitron, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = color;
+    const arrow = delta > 0 ? '→' : '←';
+    ctx.fillText(`${arrow} ${absDelta.toFixed(0)}°`, cx, cy + R + 8);
+  }
+}
+
+function drawTrajectory(traj, color, alpha, hourMarks) {
+  const W = canvas.width;
+  const cx = W/2, cy = W/2;
+  const R = W * 0.46;
+
+  // Curve
+  ctx.beginPath();
+  let started = false;
+  traj.forEach(p => {
+    if (p.alt < -5) { started = false; return; }
+    const { x, y } = solToXY(p.az, p.alt, cx, cy, R);
+    if (!started) { ctx.moveTo(x, y); started = true; }
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([2, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // Hour markers (only for the live trajectory)
+  if (hourMarks) {
+    ctx.font = `${W*0.022}px Share Tech Mono, monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    traj.forEach(p => {
+      if (p.alt < 0) return;
+      const minutes = p.t.getHours()*60 + p.t.getMinutes();
+      if (minutes % 60 !== 0) return;
+      const { x, y } = solToXY(p.az, p.alt, cx, cy, R);
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI*2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha * 1.3;
+      ctx.fill();
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillText(p.t.getHours() + 'h', x + 11, y);
+      ctx.globalAlpha = 1;
+    });
+  }
+}
+
+function drawSunMarker(sol, cx, cy, R, color) {
+  const { x, y } = solToXY(sol.az, sol.alt, cx, cy, R);
+  const below = sol.alt < 0;
+
+  if (!below) {
+    const grd = ctx.createRadialGradient(x, y, 0, x, y, 32);
+    grd.addColorStop(0, color + '66');
+    grd.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(x, y, 32, 0, Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
+
+    const t = Date.now() / 1000;
+    const pr = 13 + 3 * Math.sin(t * 2);
+    ctx.beginPath(); ctx.arc(x, y, pr, 0, Math.PI*2);
+    ctx.strokeStyle = color + '66';
+    ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
+  ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2);
+  ctx.fillStyle = below ? '#4a3200' : color;
+  ctx.globalAlpha = below ? 0.35 : 1;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  if (!below) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy); ctx.lineTo(x, y);
+    ctx.strokeStyle = color + '33';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawEclipseMarker(pos, cx, cy, R, color, label) {
+  const { x, y } = solToXY(pos.az, pos.alt, cx, cy, R);
+  const below = pos.alt < 0;
+
+  ctx.globalAlpha = below ? 0.4 : 1;
+
+  // outer ring
+  ctx.beginPath();
+  ctx.arc(x, y, 14, 0, Math.PI*2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // crosshair
+  ctx.beginPath();
+  ctx.moveTo(x - 18, y); ctx.lineTo(x - 14, y);
+  ctx.moveTo(x + 14, y); ctx.lineTo(x + 18, y);
+  ctx.moveTo(x, y - 18); ctx.lineTo(x, y - 14);
+  ctx.moveTo(x, y + 14); ctx.lineTo(x, y + 18);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // inner dot
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // label
+  const W = canvas.width;
+  ctx.font = `bold ${W*0.022}px Share Tech Mono, monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  const parts = label.split(' ');
+  ctx.fillText(parts[0] + ' ' + parts[1], x + 20, y);
+  ctx.globalAlpha = 1;
+}
+
+// ═══════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════
+function loop() {
+  // Hysteresis
+  if (S.orReady) {
+    let target = (S.camAzRaw + S.compassOffset + 360) % 360;
+    S.camAz = smoothAngle(S.camAz, target, S.hystFactor);
+  }
+
+  const sol = sunPosition(new Date(), S.lat, S.lon);
+
+  drawCompass(sol);
+
+  document.getElementById('vAz').textContent = sol.az.toFixed(1) + '°';
+  const elStr = (sol.alt < 0 ? '↓' : '') + sol.alt.toFixed(1) + '°';
+  const elEl = document.getElementById('vEl');
+  elEl.textContent = elStr;
+  elEl.style.color = sol.alt < 0 ? 'rgba(200,220,240,0.3)' : 'var(--solar)';
+  document.getElementById('vCam').textContent =
+    S.orReady ? S.camAz.toFixed(0) + '°' : '---°';
+
+  // Calibration overlay live
+  if (document.getElementById('calibOverlay').classList.contains('visible')) {
+    document.getElementById('cRaw').textContent = S.camAzRaw.toFixed(1) + '°';
+    document.getElementById('cFinal').textContent = S.camAz.toFixed(1) + '°';
+    document.getElementById('cOffset').textContent = S.compassOffset.toFixed(1) + '°';
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════
+// ECLIPSE TOGGLE
+// ═══════════════════════════════════════════
+function toggleEclipse(i) {
+  S.showEclipse[i] = !S.showEclipse[i];
+  document.getElementById('e'+i).classList.toggle('on', S.showEclipse[i]);
+
+  const anyActive = S.showEclipse.some(x => x);
+  const b = document.getElementById('modeBadge');
+  if (anyActive) {
+    const idx = S.showEclipse.indexOf(true);
+    b.textContent = ECLIPSES[idx].label.split(' ').slice(0,2).join(' ');
+    b.className = 'eclipse';
+  } else {
+    b.textContent = 'TIEMPO REAL';
+    b.className = '';
+  }
+}
+
+function resetNow() {
+  S.showEclipse = [false, false, false];
+  [0,1,2].forEach(i => document.getElementById('e'+i).classList.remove('on'));
+  const b = document.getElementById('modeBadge');
+  b.textContent = 'TIEMPO REAL';
+  b.className = '';
+}
+
+// ═══════════════════════════════════════════
+// TRAJECTORY TOGGLE
+// ═══════════════════════════════════════════
+function toggleTraj() {
+  S.showTraj = !S.showTraj;
+  document.getElementById('trajToggle').classList.toggle('on', S.showTraj);
+}
+
+// ═══════════════════════════════════════════
+// CALIBRATION
+// ═══════════════════════════════════════════
+function openCalib() { document.getElementById('calibOverlay').classList.add('visible'); }
+function closeCalib() { document.getElementById('calibOverlay').classList.remove('visible'); }
+
+function nudgeOffset(delta) {
+  S.compassOffset += delta;
+  while (S.compassOffset > 180) S.compassOffset -= 360;
+  while (S.compassOffset < -180) S.compassOffset += 360;
+  saveCalib();
+}
+
+function setHyst(v) {
+  S.hystFactor = v;
+  document.getElementById('hystVal').textContent = v;
+  highlightHyst();
+  saveCalib();
+}
+
+function highlightHyst() {
+  ['h2','h5','h8','h15'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('on');
+  });
+  const cur = document.getElementById('h' + S.hystFactor);
+  if (cur) cur.classList.add('on');
+  document.getElementById('hystVal').textContent = S.hystFactor;
+}
+
+function autoCalibSun() {
+  const sol = sunPosition(new Date(), S.lat, S.lon);
+  if (sol.alt < 0) {
+    alert('El sol está bajo el horizonte. Calibra cuando el sol sea visible.');
+    return;
+  }
+  let offset = sol.az - S.camAzRaw;
+  while (offset > 180) offset -= 360;
+  while (offset < -180) offset += 360;
+  S.compassOffset = offset;
+  saveCalib();
+}
+
+function resetCalib() {
+  S.compassOffset = 0;
+  saveCalib();
+}
+
+// ═══════════════════════════════════════════
+// PHOTO CAPTURE
+// ═══════════════════════════════════════════
+let capturedDataUrl = null;
+
+function capturePhoto() {
+  const vid = document.getElementById('video');
+  const cap = document.getElementById('captureCanvas');
+  const sol = sunPosition(new Date(), S.lat, S.lon);
+
+  const flash = document.getElementById('flashOverlay');
+  flash.classList.add('flash');
+  setTimeout(() => flash.classList.remove('flash'), 150);
+
+  const vw = vid.videoWidth || window.innerWidth;
+  const vh = vid.videoHeight || window.innerHeight;
+  cap.width = vw; cap.height = vh;
+  const c = cap.getContext('2d');
+
+  if (vid.readyState >= 2) c.drawImage(vid, 0, 0, vw, vh);
+  else { c.fillStyle = '#060810'; c.fillRect(0, 0, vw, vh); }
+
+  // vignette
+  const vig = c.createRadialGradient(vw/2, vh/2, vw*0.2, vw/2, vh/2, vw*0.75);
+  vig.addColorStop(0, 'transparent');
+  vig.addColorStop(1, 'rgba(6,8,16,0.45)');
+  c.fillStyle = vig;
+  c.fillRect(0, 0, vw, vh);
+
+  // mini compass
+  const oSize = Math.min(vw, vh) * 0.30;
+  drawCompassMini(c, vw - oSize/2 - 16, oSize/2 + 16, oSize/2 * 0.92, sol);
+
+  // bottom data bar — ADAPTIVE FOR ASPECT RATIO
+  const isPortrait = vh > vw;
+  const barH = isPortrait ? vh * 0.07 : vh * 0.085;
+  c.fillStyle = 'rgba(6,8,16,0.85)';
+  c.fillRect(0, vh - barH, vw, barH);
+
+  // logo
+  const logoFs = barH * 0.42;
+  c.font = `bold ${logoFs}px Orbitron, sans-serif`;
+  c.textBaseline = 'middle';
+  c.textAlign = 'left';
+  c.fillStyle = '#ffb700';
+  c.fillText('CLICK', 14, vh - barH/2);
+  const lw = c.measureText('CLICK').width;
+  c.fillStyle = '#ff4500';
+  c.fillText('PSE', 14 + lw, vh - barH/2);
+  const logoEnd = 14 + lw + c.measureText('PSE').width;
+
+  // Timestamp first (right-aligned, fixed width)
+  const now = new Date();
+  const ts = now.toLocaleString('es-ES', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  const tsFs = barH * (isPortrait ? 0.26 : 0.22);
+  c.font = `${tsFs}px Share Tech Mono, monospace`;
+  c.fillStyle = 'rgba(200,220,240,0.45)';
+  c.textAlign = 'right';
+  c.fillText(ts, vw - 12, vh - barH/2);
+  const tsW = c.measureText(ts).width;
+
+  // Data fields — fit between logo and timestamp
+  const fields = [
+    { label:'AZ',  val: sol.az.toFixed(1) + '°' },
+    { label:'EL',  val: (sol.alt < 0 ? '↓' : '') + sol.alt.toFixed(1) + '°' },
+    { label:'CAM', val: S.orReady ? S.camAz.toFixed(0) + '°' : '---°' },
+  ];
+  const fieldsStart = logoEnd + 16;
+  const fieldsEnd = vw - tsW - 24;
+  const fieldsArea = Math.max(0, fieldsEnd - fieldsStart);
+  const fieldW = fieldsArea / 3;
+
+  if (fieldW > 60) {  // only draw if there's room
+    c.textAlign = 'center';
+    fields.forEach((f, i) => {
+      const fx = fieldsStart + fieldW * (i + 0.5);
+      c.fillStyle = 'rgba(200,220,240,0.45)';
+      c.font = `${barH*0.22}px Share Tech Mono, monospace`;
+      c.fillText(f.label, fx, vh - barH * 0.72);
+      c.fillStyle = '#ffb700';
+      c.font = `bold ${barH*0.36}px Orbitron, sans-serif`;
+      c.fillText(f.val, fx, vh - barH * 0.32);
+    });
+  } else {
+    // fallback: stack on second line above bar
+    c.fillStyle = 'rgba(6,8,16,0.7)';
+    c.fillRect(0, vh - barH*1.7, vw, barH*0.7);
+    c.textAlign = 'center';
+    fields.forEach((f, i) => {
+      const fx = vw * (i + 0.5) / 3;
+      c.fillStyle = 'rgba(200,220,240,0.45)';
+      c.font = `${barH*0.20}px Share Tech Mono, monospace`;
+      c.fillText(f.label, fx, vh - barH*1.55);
+      c.fillStyle = '#ffb700';
+      c.font = `bold ${barH*0.32}px Orbitron, sans-serif`;
+      c.fillText(f.val, fx, vh - barH*1.18);
+    });
+  }
+
+  capturedDataUrl = cap.toDataURL('image/jpeg', 0.92);
+  document.getElementById('previewImg').src = capturedDataUrl;
+  document.getElementById('previewModal').classList.add('visible');
+}
+
+function drawCompassMini(c, cx, cy, R, sol) {
+  c.save();
+  c.beginPath(); c.arc(cx, cy, R, 0, Math.PI*2);
+  c.fillStyle = 'rgba(6,8,16,0.75)';
+  c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1.5; c.stroke();
+
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(r(-S.camAz));
+  c.translate(-cx, -cy);
+
+  for (let deg = 0; deg < 360; deg += 30) {
+    const ang = r(deg - 90);
+    const r1 = R, r2 = R - (deg % 90 === 0 ? 10 : 6);
+    c.beginPath();
+    c.moveTo(cx + r1*Math.cos(ang), cy + r1*Math.sin(ang));
+    c.lineTo(cx + r2*Math.cos(ang), cy + r2*Math.sin(ang));
+    c.strokeStyle = deg % 90 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)';
+    c.lineWidth = 1; c.stroke();
+  }
+
+  // trajectory
+  if (S.showTraj && S.gpsReady) {
+    const traj = sunTrajectory(new Date(), S.lat, S.lon);
+    c.beginPath();
+    let started = false;
+    traj.forEach(p => {
+      if (p.alt < -5) { started = false; return; }
+      const xy = miniXY(p.az, p.alt, cx, cy, R);
+      if (!started) { c.moveTo(xy.x, xy.y); started = true; }
+      else c.lineTo(xy.x, xy.y);
+    });
+    c.strokeStyle = 'rgba(255,183,0,0.5)';
+    c.lineWidth = 1;
+    c.setLineDash([2, 3]); c.stroke(); c.setLineDash([]);
+  }
+
+  // eclipse trajectories (small)
+  S.showEclipse.forEach((on, i) => {
+    if (!on) return;
+    const traj = sunTrajectory(ECLIPSES[i].date, S.lat, S.lon);
+    c.beginPath();
+    let started = false;
+    traj.forEach(p => {
+      if (p.alt < -5) { started = false; return; }
+      const xy = miniXY(p.az, p.alt, cx, cy, R);
+      if (!started) { c.moveTo(xy.x, xy.y); started = true; }
+      else c.lineTo(xy.x, xy.y);
+    });
+    c.strokeStyle = ECLIPSES[i].color + '99';
+    c.lineWidth = 1;
+    c.setLineDash([2, 3]); c.stroke(); c.setLineDash([]);
+  });
+
+  // cardinals
+  const cards = [{l:'N',d:0,col:'#ff4500'},{l:'E',d:90,col:'rgba(200,220,240,0.7)'},{l:'S',d:180,col:'rgba(200,220,240,0.7)'},{l:'O',d:270,col:'rgba(200,220,240,0.7)'}];
+  c.font = `bold ${R*0.22}px Orbitron, sans-serif`;
+  c.textAlign='center'; c.textBaseline='middle';
+  cards.forEach(card => {
+    const ang = r(card.d - 90);
+    const rr = R - 14;
+    const x = cx + rr*Math.cos(ang), y = cy + rr*Math.sin(ang);
+    c.save();
+    c.translate(x, y); c.rotate(r(S.camAz));
+    c.fillStyle = card.col;
+    c.fillText(card.l, 0, 0);
+    c.restore();
+  });
+
+  c.restore();
+
+  // sun
+  const xy = miniXY(sol.az, sol.alt, cx, cy, R);
+  const below = sol.alt < 0;
+  if (!below) {
+    const g = c.createRadialGradient(xy.x, xy.y, 0, xy.x, xy.y, R*0.2);
+    g.addColorStop(0, 'rgba(255,183,0,0.45)');
+    g.addColorStop(1, 'transparent');
+    c.beginPath(); c.arc(xy.x, xy.y, R*0.2, 0, Math.PI*2);
+    c.fillStyle = g; c.fill();
+  }
+  c.beginPath(); c.arc(xy.x, xy.y, R*0.075, 0, Math.PI*2);
+  c.fillStyle = below ? '#4a3200' : '#ffb700';
+  c.globalAlpha = below ? 0.3 : 1;
+  c.fill(); c.globalAlpha = 1;
+
+  // eclipse markers
+  S.showEclipse.forEach((on, i) => {
+    if (!on) return;
+    const ep = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+    const exy = miniXY(ep.az, ep.alt, cx, cy, R);
+    c.beginPath();
+    c.arc(exy.x, exy.y, R*0.1, 0, Math.PI*2);
+    c.strokeStyle = ECLIPSES[i].color;
+    c.lineWidth = 1.5;
+    c.stroke();
+    c.beginPath();
+    c.arc(exy.x, exy.y, R*0.035, 0, Math.PI*2);
+    c.fillStyle = ECLIPSES[i].color;
+    c.fill();
+  });
+
+  // camera arrow
+  c.save();
+  c.translate(cx, cy);
+  const arrR = R - 3;
+  c.beginPath();
+  c.moveTo(0, -arrR);
+  c.lineTo(-5, -arrR + 11);
+  c.lineTo(5, -arrR + 11);
+  c.closePath();
+  c.fillStyle = 'rgba(0,229,160,0.85)';
+  c.fill();
+  c.restore();
+
+  c.restore();
+}
+
+function miniXY(az, alt, cx, cy, R) {
+  const clamped = Math.max(-90, Math.min(90, alt));
+  const rr = R * (1 - clamped / 90);
+  const ang = r(az - 90);
+  return { x: cx + rr*Math.cos(ang), y: cy + rr*Math.sin(ang) };
+}
+
+function savePhoto() {
+  if (!capturedDataUrl) return;
+  const a = document.createElement('a');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+  a.download = `clickpse_${stamp}.jpg`;
+  a.href = capturedDataUrl;
+  a.click();
+  discardPhoto();
+}
+
+function discardPhoto() {
+  capturedDataUrl = null;
+  document.getElementById('previewModal').classList.remove('visible');
+}
+</script>
+</body>
+</html>
