@@ -1,0 +1,3010 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Clickpse</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --solar: #ffb700;
+  --solar-soft: rgba(255,183,0,0.15);
+  --eclipse: #ff4500;
+  --eclipse-soft: rgba(255,69,0,0.12);
+  --green: #00e5a0;
+  --green-soft: rgba(0,229,160,0.12);
+  --warn: #ff4500;
+  --text: #ddeeff;
+  --text-dim: rgba(200,220,240,0.4);
+  --bg: #060810;
+  --border: rgba(255,255,255,0.07);
+  --mono: 'Share Tech Mono', monospace;
+  --display: 'Orbitron', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+#video {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1s;
+}
+#video.active { opacity: 1; }
+
+/* AR overlay canvas - covers full screen, draws sun/trajectories projected */
+#arCanvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+#vignette {
+  position: fixed; inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(to bottom, rgba(6,8,16,0.5) 0%, transparent 14%, transparent 84%, rgba(6,8,16,0.85) 100%);
+  pointer-events: none;
+}
+
+#ui {
+  position: fixed; inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+/* HEADER */
+#header {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+  background: linear-gradient(to bottom, rgba(6,8,16,0.7), transparent);
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: clamp(18px, 5vw, 24px);
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--solar);
+  text-shadow: 0 0 20px rgba(255,183,0,0.5);
+}
+.logo em { color: var(--eclipse); font-style: normal; }
+
+.header-right { display: flex; align-items: center; gap: 7px; }
+
+.icon-btn {
+  background: rgba(6,8,16,0.7);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 30px; height: 30px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-btn:active { color: var(--green); border-color: var(--green); }
+.icon-btn.warn { color: var(--warn); border-color: rgba(255,69,0,0.4); }
+.icon-btn.sun {
+  color: var(--solar);
+  border-color: rgba(255,183,0,0.35);
+  background: rgba(255,183,0,0.08);
+}
+.icon-btn.sun:active { background: var(--solar); color: #000; }
+.icon-btn.sun.flash {
+  background: var(--solar);
+  color: #000;
+  transition: background 0.4s, color 0.4s;
+}
+
+/* LAYERS PANEL — dropdown anchored under header */
+#layersPanel {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  z-index: 6;
+  background: rgba(6,8,16,0.95);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 175px;
+  pointer-events: all;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+#layersPanel.visible { display: flex; }
+.layers-title {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.8px;
+  text-align: left;
+  width: 100%;
+}
+.layer-toggle:active { background: rgba(255,255,255,0.04); }
+.layer-toggle.on {
+  color: var(--solar);
+  border-color: rgba(255,183,0,0.25);
+  background: rgba(255,183,0,0.07);
+}
+.layer-toggle .ico { width: 18px; text-align: center; }
+.layer-toggle .lbl { flex: 1; padding: 0 8px; }
+.layer-toggle .chk {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--text-dim);
+  background: transparent;
+}
+.layer-toggle.on .chk {
+  background: var(--solar);
+  border-color: var(--solar);
+  box-shadow: 0 0 6px rgba(255,183,0,0.5);
+}
+
+.hidden { display: none !important; }
+
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-dim);
+}
+.dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2.5s infinite;
+}
+.dot.warn {
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+  animation: blink 1s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* COMPASS area is now smaller — bottom-left mini */
+#compassMini {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 100px;
+  height: 100px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+#compassCanvas {
+  width: 100%; height: 100%;
+}
+
+/* SPACER pushes content down between header and footer in portrait */
+#spacer { flex: 1; pointer-events: none; }
+
+/* BOTTOM PANEL */
+#bottomPanel {
+  pointer-events: all;
+  background: linear-gradient(to top, rgba(6,8,16,0.92), rgba(6,8,16,0.7) 80%, transparent);
+  backdrop-filter: blur(12px);
+  padding: 6px 0 0;
+}
+
+#dataBar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.dcell {
+  padding: 6px 4px;
+  text-align: center;
+  background: rgba(6,8,16,0.55);
+  min-width: 0;
+}
+.dlabel {
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  line-height: 1;
+}
+.dval {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--solar);
+  letter-spacing: 0.5px;
+  font-size: clamp(12px, 3.6vw, 16px);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dval.green { color: var(--green); }
+.dval.warn  { color: var(--warn); }
+
+#eclipseStrip {
+  padding: 6px 12px 2px;
+}
+
+.strip-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+/* Barra inferior (v0.7): 2 botones que abren modales (Eclipses + Planificación).
+   Sustituye a las 3 .etab de versiones anteriores. */
+.ebar { display: flex; gap: 6px; }
+
+.ebar-btn {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+  min-height: 36px;
+}
+.ebar-btn:active { transform: scale(0.97); background: rgba(255,255,255,0.08); }
+.ebar-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ebar-btn[disabled]:active { transform: none; background: rgba(255,255,255,0.04); }
+.ebar-btn.on {
+  border-color: var(--solar);
+  color: var(--solar);
+  background: rgba(255,183,0,0.08);
+}
+.ebar-btn .ebar-ico { font-size: 14px; }
+.ebar-btn .ebar-lbl { font-weight: bold; letter-spacing: 0.5px; }
+.ebar-btn .ebar-soon {
+  position: absolute;
+  top: 2px; right: 4px;
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+#shutterWrap {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 4px 14px 2px;
+}
+#shutterWrap .left-slot,
+#shutterWrap .right-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#shutterWrap .right-slot { justify-content: flex-end; }
+#shutterWrap .left-slot  { justify-content: flex-start; }
+
+#shutter {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.92);
+  border: 3px solid rgba(255,255,255,0.4);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 3px 14px rgba(0,0,0,0.5);
+  cursor: pointer;
+  outline: none;
+}
+#shutter:active { transform: scale(0.91); }
+
+.side-action {
+  background: rgba(6,8,16,0.7);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 1.2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.side-action:active { color: var(--green); border-color: var(--green); }
+.side-action .ico {
+  font-family: var(--display);
+  font-size: 13px;
+}
+
+#bottomBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 14px 8px;
+}
+
+#locLabel { font-size: 9px; color: var(--text-dim); }
+
+.btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.btn:active { border-color: var(--green); color: var(--green); }
+
+/* WARNING BANNER */
+#warnBanner {
+  position: absolute;
+  top: 50px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  pointer-events: all;
+  background: rgba(255,69,0,0.12);
+  border: 1px solid rgba(255,69,0,0.4);
+  color: var(--warn);
+  font-size: 10px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  max-width: 90%;
+  text-align: center;
+}
+#warnBanner.visible { display: flex; }
+#warnBanner button {
+  background: none;
+  border: 1px solid rgba(255,69,0,0.5);
+  color: var(--warn);
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 3px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  margin-left: 6px;
+}
+
+/* HUD diag (v0.7.0+, debug temporal): hijo directo de body con position:fixed
+   para escapar del stacking context de #ui. z-index 90 lo coloca por encima
+   de body::after (scanlines, z=4) y debajo del overlay de permisos (z=100). */
+#debugHUD {
+  position: fixed;
+  top: 50px; left: 8px;
+  z-index: 90;
+  background: rgba(0,0,0,0.85);
+  border: 1px solid rgba(0,229,160,0.5);
+  border-radius: 3px;
+  padding: 5px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: #d8dde6;
+  pointer-events: none;
+  max-width: 175px;
+  display: none;
+}
+#debugHUD.visible { display: block; }
+#debugHUD .hud-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+#debugHUD .hud-k { color: #6c7280; }
+#debugHUD .hud-v { color: #00e5a0; font-weight: bold; }
+/* Ocultar HUD durante AL SOL (cámara con diana, queremos pantalla limpia) */
+body.aim-active #debugHUD { display: none !important; }
+
+/* CALIBRATION */
+#calibOverlay {
+  position: fixed; inset: 0;
+  z-index: 150;
+  background: rgba(6,8,16,0.97);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 24px 18px;
+  text-align: center;
+  overflow-y: auto;
+}
+#calibOverlay.visible { display: flex; }
+
+.calib-title {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--green);
+  margin-top: 10px;
+}
+
+.calib-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 320px;
+}
+
+.diag-block {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 240px;
+}
+.diag-row {
+  display: flex; justify-content: space-between;
+  width: 100%; gap: 16px;
+}
+.diag-label { color: var(--text-dim); }
+.diag-val {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--solar);
+}
+.diag-val.ok { color: var(--green); }
+.diag-val.warn { color: var(--warn); }
+
+.calib-row {
+  display: flex; gap: 10px; align-items: center;
+  font-family: var(--mono);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.nudge-row { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; }
+
+.nudge-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  min-width: 44px;
+}
+.nudge-btn:active { background: var(--green-soft); border-color: var(--green); }
+.nudge-btn.on { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+.nudge-btn.big {
+  font-size: 14px;
+  padding: 9px 22px;
+  min-width: 80px;
+  border-color: rgba(255,183,0,0.35);
+  color: var(--solar);
+  background: rgba(255,183,0,0.08);
+}
+.nudge-btn.big:active { background: var(--solar); color: #000; }
+.nudge-btn.big.on {
+  background: var(--solar);
+  color: #000;
+  border-color: var(--solar);
+  box-shadow: 0 0 12px rgba(255,183,0,0.4);
+}
+
+.calib-buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+.calib-btn {
+  background: var(--green);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 10px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.calib-btn:active { transform: scale(0.96); }
+.calib-btn.sec {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.calib-btn.warn {
+  background: transparent;
+  border: 1px solid rgba(255,69,0,0.4);
+  color: var(--warn);
+}
+
+/* MODAL ECLIPSES (v0.7) — lista con 3 entradas, cada una con 3 acciones.
+   #eclipseInfoModal — detalle por eclipse. Misma capa que calibOverlay (z=150). */
+#eclipsesModal, #eclipseInfoModal {
+  position: fixed; inset: 0;
+  z-index: 150;
+  background: rgba(6,8,16,0.97);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 24px 18px;
+  text-align: center;
+  overflow-y: auto;
+}
+#eclipsesModal.visible, #eclipseInfoModal.visible { display: flex; }
+
+.elist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 380px;
+  margin-top: 6px;
+}
+
+.eitem {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--marker, #ff4500);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eitem.ar-on {
+  background: rgba(255,183,0,0.06);
+}
+
+.eitem-info {
+  flex: 1;
+  text-align: left;
+  font-family: var(--mono);
+}
+.eitem-date {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--text);
+  font-family: var(--display);
+  letter-spacing: 1px;
+}
+.eitem-type {
+  font-size: 10px;
+  color: var(--marker, #ff4500);
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.eitem-actions {
+  display: flex;
+  gap: 4px;
+}
+.eaction {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  width: 36px; height: 36px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.eaction:active { transform: scale(0.92); background: rgba(255,255,255,0.08); }
+.eaction.on {
+  border-color: var(--solar);
+  color: var(--solar);
+  background: rgba(255,183,0,0.12);
+}
+.eaction.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.eaction.disabled:active { transform: none; background: rgba(255,255,255,0.04); }
+
+/* Detalle (i) */
+.einfo-block {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  max-width: 340px;
+  text-align: left;
+}
+.einfo-row {
+  display: flex; justify-content: space-between;
+  width: 100%; gap: 16px;
+}
+.einfo-label { color: var(--text-dim); }
+.einfo-val {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--solar);
+}
+.einfo-notes {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+  max-width: 340px;
+  text-align: left;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.02);
+  border-left: 2px solid var(--text-dim);
+  border-radius: 3px;
+}
+.einfo-warn {
+  font-size: 10px;
+  color: var(--warn);
+  line-height: 1.5;
+  max-width: 340px;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,69,0,0.3);
+  background: rgba(255,69,0,0.06);
+  border-radius: 3px;
+}
+.einfo-credit {
+  font-size: 9px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  text-align: center;
+  margin-top: 4px;
+}
+.einfo-credit a { color: var(--text-dim); text-decoration: underline; }
+
+
+  position: fixed; inset: 0;
+  z-index: 200;             /* por encima de calibOverlay y header */
+  display: none;
+  pointer-events: none;     /* la cámara debe seguir 'detrás' visible */
+}
+#sunAimOverlay.visible { display: block; }
+
+/* La diana ocupa el centro; pointer-events ninguno (es decorativa) */
+.aim-reticle {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60vmin; height: 60vmin;
+  max-width: 320px; max-height: 320px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(0,0,0,0.6));
+}
+.aim-reticle svg { width: 100%; height: 100%; }
+
+/* Panel superior con instrucciones */
+.aim-instructions {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 16px 16px 18px;
+  background: linear-gradient(to bottom, rgba(6,8,16,0.85), transparent);
+  text-align: center;
+  pointer-events: none;
+}
+.aim-title {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--solar);
+  margin-bottom: 4px;
+}
+.aim-hint {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+/* Botón cancelar arriba a la derecha */
+.aim-cancel {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(6,8,16,0.7);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  pointer-events: all;
+  display: flex; align-items: center; justify-content: center;
+}
+.aim-cancel:active { background: rgba(255,69,0,0.4); }
+
+/* Lectura en vivo (datos del sensor + sol calculado) */
+.aim-readout {
+  position: absolute;
+  bottom: 88px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(6,8,16,0.75);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  pointer-events: none;
+  min-width: 200px;
+}
+.aim-row { display: flex; justify-content: space-between; gap: 12px; }
+.aim-lbl { color: var(--text-dim); }
+.aim-val { color: var(--solar); font-weight: 700; }
+.aim-warn { color: var(--warn); font-weight: 700; text-align: center; width: 100%; }
+
+/* Botón confirmar abajo, grande y obvio */
+.aim-confirm {
+  position: absolute;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--green);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  padding: 14px 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  pointer-events: all;
+  box-shadow: 0 0 20px rgba(0,229,160,0.4);
+}
+.aim-confirm:active { transform: translateX(-50%) scale(0.96); }
+.aim-confirm:disabled {
+  background: rgba(0,229,160,0.25);
+  color: var(--text-dim);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Cuando el aim está activo, ocultamos la UI de fondo para una pantalla
+   limpia. Conservamos compás mini (útil para confirmar la dirección)
+   y la viñeta. El fondo (cámara + AR canvas) sigue visible. */
+body.aim-active #header,
+body.aim-active #bottomPanel,
+body.aim-active #warnBanner,
+body.aim-active #layersPanel,
+body.aim-active #eclipsesModal,
+body.aim-active #eclipseInfoModal { display: none !important; }
+
+/* PERMISSION */
+#overlay {
+  position: fixed; inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 24px;
+  text-align: center;
+}
+#overlay.gone { display: none; }
+
+.ov-logo {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: var(--solar);
+  text-shadow: 0 0 30px rgba(255,183,0,0.5);
+}
+.ov-logo em { color: var(--eclipse); font-style: normal; }
+
+.ov-icon { font-size: 46px; animation: spin 20s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ov-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-width: 290px;
+}
+
+.ov-btn {
+  background: var(--solar);
+  color: #000;
+  border: none;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 13px 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  max-width: 270px;
+}
+.ov-btn:active { opacity: 0.85; transform: scale(0.97); }
+.ov-btn.sec {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 9px;
+  font-family: var(--mono);
+}
+
+/* FLASH & PREVIEW */
+#flashOverlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: white; opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.05s;
+}
+#flashOverlay.flash { opacity: 0.7; }
+
+#previewModal {
+  position: fixed; inset: 0;
+  z-index: 200;
+  background: rgba(6,8,16,0.97);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px;
+}
+#previewModal.visible { display: flex; }
+
+#previewImg {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+
+.modal-btns { display: flex; gap: 10px; width: 100%; max-width: 380px; }
+
+.modal-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  border: none;
+}
+.modal-btn:active { transform: scale(0.96); }
+.modal-btn.save { background: var(--solar); color: #000; }
+.modal-btn.discard {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+#captureCanvas { display: none; }
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  z-index: 4;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
+  );
+  pointer-events: none;
+}
+
+/* LANDSCAPE */
+@media (orientation: landscape) and (max-height: 600px) {
+  #compassMini { width: 82px; height: 82px; }
+  #header { padding: 8px 10px 4px; }
+  #bottomPanel { display: grid; grid-template-columns: 1fr auto auto; gap: 0; padding: 0; align-items: stretch; }
+  #bottomPanel #dataBar { grid-column: 1; border: none; }
+  #bottomPanel #eclipseStrip { grid-column: 1; padding: 4px 12px; }
+  #bottomPanel #shutterWrap { grid-column: 2; padding: 0 8px; grid-template-columns: auto auto; }
+  #bottomPanel #shutterWrap .left-slot { display: none; }
+  #bottomPanel #bottomBar { grid-column: 3; flex-direction: column; gap: 4px; padding: 6px 12px; }
+  #shutter { width: 44px; height: 44px; }
+}
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="arCanvas"></canvas>
+<div id="vignette"></div>
+
+<div id="ui">
+  <div id="header">
+    <div class="logo">CLICK<em>PSE</em></div>
+    <div class="header-right">
+      <button class="icon-btn sun" id="sunBtn" onclick="quickAlSol()" aria-label="Calibrar al sol">☀</button>
+      <button class="icon-btn" id="layersBtn" onclick="toggleLayersPanel()" aria-label="Capas">🎚</button>
+      <button class="icon-btn" id="calibBtn" onclick="openCalib()" aria-label="Calibrar">⚙</button>
+      <div class="dot" id="dot"></div>
+    </div>
+  </div>
+
+  <div id="layersPanel">
+    <div class="layers-title">▸ Capas visibles</div>
+    <button class="layer-toggle" id="lyr_arSun"     onclick="toggleLayer('arSun')"><span class="ico">☀</span><span class="lbl">AR Sol</span><span class="chk"></span></button>
+    <button class="layer-toggle" id="lyr_arTraj"    onclick="toggleLayer('arTraj')"><span class="ico">◠</span><span class="lbl">AR Trayectoria</span><span class="chk"></span></button>
+    <button class="layer-toggle" id="lyr_arEclipse" onclick="toggleLayer('arEclipse')"><span class="ico">◉</span><span class="lbl">AR Eclipses</span><span class="chk"></span></button>
+    <button class="layer-toggle" id="lyr_arHorizon" onclick="toggleLayer('arHorizon')"><span class="ico">━</span><span class="lbl">AR Horizonte</span><span class="chk"></span></button>
+    <button class="layer-toggle" id="lyr_miniCompass" onclick="toggleLayer('miniCompass')"><span class="ico">⊕</span><span class="lbl">Brújula mini</span><span class="chk"></span></button>
+    <button class="layer-toggle" id="lyr_dataBar"   onclick="toggleLayer('dataBar')"><span class="ico">▤</span><span class="lbl">Barra de datos</span><span class="chk"></span></button>
+  </div>
+
+  <div id="warnBanner">
+    <span id="warnText"></span>
+    <button onclick="openCalib()">DIAG</button>
+  </div>
+
+  <div id="spacer"></div>
+
+  <canvas id="compassCanvas" style="display:none"></canvas>
+  <div id="compassMini"><canvas id="compassCanvasReal" style="width:100%;height:100%"></canvas></div>
+
+  <div id="bottomPanel">
+    <div id="dataBar">
+      <div class="dcell"><div class="dlabel">AZ SOL</div><div class="dval" id="vAz">---°</div></div>
+      <div class="dcell"><div class="dlabel">ELEV</div><div class="dval" id="vEl">---°</div></div>
+      <div class="dcell"><div class="dlabel">CÁMARA</div><div class="dval green" id="vCam">---°</div></div>
+    </div>
+
+    <div id="eclipseStrip">
+      <div class="ebar">
+        <button class="ebar-btn" id="ebarEclipses" onclick="openEclipsesModal()">
+          <span class="ebar-ico">🌑</span><span class="ebar-lbl">Eclipses</span>
+        </button>
+        <button class="ebar-btn" id="ebarPlan" onclick="openPlanModal()" disabled aria-disabled="true">
+          <span class="ebar-ico">📅</span><span class="ebar-lbl">Planificación</span>
+          <span class="ebar-soon">PRÓXIMO</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="shutterWrap">
+      <div class="left-slot"></div>
+      <button id="shutter" onclick="capturePhoto()" aria-label="Disparar"></button>
+      <div class="right-slot">
+        <button class="side-action" onclick="openCalib()" aria-label="Calibrar"><span class="ico">⚙</span>CAL</button>
+      </div>
+    </div>
+
+    <div id="bottomBar">
+      <div id="locLabel">📍 Buscando... <span id="buildStamp" style="opacity:0.5; margin-left:6px;">v0.7.0</span></div>
+      <button class="btn" onclick="resetNow()">⟳ AHORA</button>
+    </div>
+  </div>
+</div>
+
+<div id="flashOverlay"></div>
+<canvas id="captureCanvas"></canvas>
+
+<!-- HUD diag temporal (v0.7.0+): hijo directo de body para escapar del stacking
+     context de #ui (z-index:3, body::after está encima con z-index:4).
+     Debe quitarse antes de release. -->
+<div id="debugHUD">
+  <div class="hud-row"><span class="hud-k">vp css</span><span class="hud-v" id="hudVP">-</span></div>
+  <div class="hud-row"><span class="hud-k">canvas</span><span class="hud-v" id="hudCV">-</span></div>
+  <div class="hud-row"><span class="hud-k">dpr eff</span><span class="hud-v" id="hudDPR">-</span></div>
+  <div class="hud-row"><span class="hud-k">camAz</span><span class="hud-v" id="hudCA">-</span></div>
+  <div class="hud-row"><span class="hud-k">pitch β</span><span class="hud-v" id="hudPI">-</span></div>
+  <div class="hud-row"><span class="hud-k">roll γ</span><span class="hud-v" id="hudRO">-</span></div>
+  <div class="hud-row"><span class="hud-k">sun az</span><span class="hud-v" id="hudSA">-</span></div>
+  <div class="hud-row"><span class="hud-k">sun alt</span><span class="hud-v" id="hudSE">-</span></div>
+  <div class="hud-row"><span class="hud-k">ndc</span><span class="hud-v" id="hudND">-</span></div>
+  <div class="hud-row"><span class="hud-k">proj px</span><span class="hud-v" id="hudPX">-</span></div>
+  <div class="hud-row"><span class="hud-k">proj %</span><span class="hud-v" id="hudPC">-</span></div>
+</div>
+
+<div id="previewModal">
+  <img id="previewImg" alt="Captura"/>
+  <div class="modal-btns">
+    <button class="modal-btn save" onclick="savePhoto()">⬇ GUARDAR</button>
+    <button class="modal-btn discard" onclick="discardPhoto()">DESCARTAR</button>
+  </div>
+</div>
+
+<div id="calibOverlay">
+  <div class="calib-title">⚙ DIAGNÓSTICO Y CALIBRACIÓN</div>
+
+  <div class="diag-block">
+    <div class="diag-row"><span class="diag-label">Sensor:</span><span id="diagSensor" class="diag-val">---</span></div>
+    <div class="diag-row"><span class="diag-label">Absoluto al norte:</span><span id="diagAbs" class="diag-val">---</span></div>
+    <div class="diag-row"><span class="diag-label">Evento usado:</span><span id="diagEvent" class="diag-val">---</span></div>
+    <div class="diag-row"><span class="diag-label">α crudo:</span><span id="cRaw" class="diag-val">---°</span></div>
+    <div class="diag-row"><span class="diag-label">α corregido:</span><span id="cFinal" class="diag-val">---°</span></div>
+    <div class="diag-row"><span class="diag-label">β (pitch):</span><span id="diagBeta" class="diag-val">---°</span></div>
+    <div class="diag-row"><span class="diag-label">γ (roll):</span><span id="diagGamma" class="diag-val">---°</span></div>
+    <div class="diag-row"><span class="diag-label">Offset:</span><span id="cOffset" class="diag-val">0°</span></div>
+    <div class="diag-row"><span class="diag-label">Inversión az:</span><span id="diagInvert" class="diag-val">NO</span></div>
+    <div class="diag-row"><span class="diag-label">FOV horiz.:</span><span id="diagFov" class="diag-val">67°</span></div>
+    <div class="diag-row"><span class="diag-label">DPR / Canvas:</span><span id="diagDPR" class="diag-val">---</span></div>
+  </div>
+
+  <div class="calib-text">
+    Si "Absoluto al norte" sale NO, la brújula no es fiable. Calibra el móvil moviéndolo en forma de 8 unos segundos, o usa "AL SOL" cuando sea visible.
+  </div>
+
+  <div class="calib-text" style="font-weight:bold;color:var(--solar);margin-top:4px;">Sensor reflejado (E↔O)</div>
+  <div class="calib-text" style="font-size:10px;line-height:1.5;">
+    Si N y S apuntan bien pero E y O están intercambiados (calibrar uno descalibra el otro), tu sensor entrega el azimut invertido. Activa esta opción.
+  </div>
+  <div class="nudge-row">
+    <button class="nudge-btn big" id="invBtn" onclick="toggleInvertAz()">↔ Invertir azimut</button>
+  </div>
+
+  <div class="calib-text" style="font-weight:bold;color:var(--solar);margin-top:8px;">Ajuste manual de azimut</div>
+  <div class="nudge-row">
+    <button class="nudge-btn big" onclick="nudgeOffset(-90)">−90°</button>
+    <button class="nudge-btn big" onclick="nudgeOffset(90)">+90°</button>
+  </div>
+  <div class="nudge-row">
+    <button class="nudge-btn" onclick="nudgeOffset(-10)">−10°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(-5)">−5°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(-1)">−1°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(1)">+1°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(5)">+5°</button>
+    <button class="nudge-btn" onclick="nudgeOffset(10)">+10°</button>
+  </div>
+
+  <div class="calib-text" style="font-weight:bold;color:var(--solar);margin-top:6px;">Histéresis (factor)</div>
+  <div class="nudge-row">
+    <button class="nudge-btn" id="h2"  onclick="setHyst(2)">2</button>
+    <button class="nudge-btn" id="h5"  onclick="setHyst(5)">5</button>
+    <button class="nudge-btn" id="h8"  onclick="setHyst(8)">8</button>
+    <button class="nudge-btn" id="h15" onclick="setHyst(15)">15</button>
+  </div>
+
+  <div class="calib-text" style="font-weight:bold;color:var(--solar);margin-top:6px;">Campo de visión cámara (FOV horizontal)</div>
+  <div class="nudge-row">
+    <button class="nudge-btn" id="f60" onclick="setFov(60)">60°</button>
+    <button class="nudge-btn" id="f67" onclick="setFov(67)">67°</button>
+    <button class="nudge-btn" id="f75" onclick="setFov(75)">75°</button>
+    <button class="nudge-btn" id="f85" onclick="setFov(85)">85°</button>
+  </div>
+
+  <div class="calib-buttons">
+    <button class="calib-btn" onclick="openSunAim()">☀ AL SOL</button>
+    <button class="calib-btn sec" id="hudToggleBtn" onclick="toggleDebugHUD()">HUD</button>
+    <button class="calib-btn warn" onclick="resetCalib()">RESET</button>
+    <button class="calib-btn sec" onclick="closeCalib()">CERRAR</button>
+  </div>
+</div>
+
+<!-- MODAL ECLIPSES (v0.7): lista con 3 entradas; cada entrada tiene 3 acciones
+     (info / AR toggle / simular). El contenido se rellena dinámicamente
+     desde renderEclipsesModal() para reflejar S.showEclipse[] en cada apertura. -->
+<div id="eclipsesModal">
+  <div class="calib-title">🌑 ECLIPSES</div>
+  <div class="calib-text">
+    Toca <b>ℹ</b> para ver detalles, <b>👁</b> para mostrar/ocultar el marcador AR sobre el cielo, <b>▶</b> para simular el momento exacto del eclipse.
+  </div>
+  <div class="elist" id="eclipsesList"></div>
+  <div class="calib-buttons">
+    <button class="calib-btn sec" onclick="closeEclipsesModal()">CERRAR</button>
+  </div>
+</div>
+
+<!-- MODAL DETALLE ECLIPSE (v0.7): se abre desde el botón ℹ del modal Eclipses.
+     Contenido relleno por renderEclipseInfo(i) — campos derivados de ECLIPSES[i]. -->
+<div id="eclipseInfoModal">
+  <div class="calib-title" id="einfoTitle">🌑 ECLIPSE</div>
+  <div class="calib-text" id="einfoSub" style="font-weight:bold;color:var(--solar);"></div>
+
+  <div class="einfo-block" id="einfoPhases">
+    <!-- relleno dinámico: filas C1 / C2 / Máx / C3 / C4 -->
+  </div>
+
+  <div class="einfo-block" id="einfoData">
+    <!-- relleno dinámico: magnitud / cobertura / alt / az / duración -->
+  </div>
+
+  <div class="einfo-notes" id="einfoNotes"></div>
+
+  <div class="einfo-warn">
+    ⚠ <b>Seguridad ocular:</b> nunca observes el sol sin filtros homologados ISO 12312-2.
+    Riesgo de daño retiniano permanente. Sólo durante la totalidad (eclipse total) puede
+    retirarse el filtro; en eclipses parciales y anulares <b>nunca</b>.
+  </div>
+
+  <div class="einfo-credit">
+    Datos: <a href="https://astromallorca.wordpress.com/" target="_blank" rel="noopener">AstroMallorca</a>
+  </div>
+
+  <div class="calib-buttons">
+    <button class="calib-btn sec" onclick="closeEclipseInfo()">VOLVER</button>
+  </div>
+</div>
+
+<!-- AL SOL: modal de cámara con diana (v0.7) -->
+<div id="sunAimOverlay">
+  <!-- Cancel button arriba a la derecha -->
+  <button class="aim-cancel" onclick="closeSunAim(false)" aria-label="Cancelar">✕</button>
+
+  <!-- Diana central: retículo grande, fondo transparente para no tapar la cámara -->
+  <div class="aim-reticle">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- Círculo exterior -->
+      <circle cx="100" cy="100" r="70" fill="none" stroke="var(--solar)" stroke-width="2" opacity="0.7"/>
+      <!-- Círculo medio -->
+      <circle cx="100" cy="100" r="40" fill="none" stroke="var(--solar)" stroke-width="1.5" opacity="0.5"/>
+      <!-- Cruz central -->
+      <line x1="100" y1="60" x2="100" y2="140" stroke="var(--solar)" stroke-width="1.5" opacity="0.8"/>
+      <line x1="60" y1="100" x2="140" y2="100" stroke="var(--solar)" stroke-width="1.5" opacity="0.8"/>
+      <!-- Punto central -->
+      <circle cx="100" cy="100" r="3" fill="var(--solar)"/>
+      <!-- Marcas cardinales -->
+      <line x1="100" y1="20" x2="100" y2="35" stroke="var(--solar)" stroke-width="2"/>
+      <line x1="100" y1="165" x2="100" y2="180" stroke="var(--solar)" stroke-width="2"/>
+      <line x1="20" y1="100" x2="35" y2="100" stroke="var(--solar)" stroke-width="2"/>
+      <line x1="165" y1="100" x2="180" y2="100" stroke="var(--solar)" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <!-- Texto guía superior -->
+  <div class="aim-instructions">
+    <div class="aim-title">CALIBRACIÓN AL SOL</div>
+    <div class="aim-hint">Centra el Sol real en la diana</div>
+  </div>
+
+  <!-- Lectura en vivo de azimut/elevación + estado del sol -->
+  <div class="aim-readout">
+    <div class="aim-row">
+      <span class="aim-lbl">Cámara:</span>
+      <span class="aim-val" id="aimCamAz">—</span>
+    </div>
+    <div class="aim-row">
+      <span class="aim-lbl">Sol calc.:</span>
+      <span class="aim-val" id="aimSunAzAlt">—</span>
+    </div>
+    <div class="aim-row" id="aimSunBelowRow" style="display:none;">
+      <span class="aim-warn">⚠ Sol bajo el horizonte</span>
+    </div>
+  </div>
+
+  <!-- Botón confirmar abajo -->
+  <button class="aim-confirm" id="aimConfirmBtn" onclick="closeSunAim(true)">
+    ✓ FIJAR CALIBRACIÓN
+  </button>
+</div>
+
+<div id="overlay">
+  <div class="ov-icon">🌑</div>
+  <div class="ov-logo">CLICK<em>PSE</em></div>
+  <div class="ov-text">
+    v0.7 — modo planificación (cualquier fecha/hora/zona horaria), info detallada por eclipse con datos de AstroMallorca, calibración AL SOL con diana de cámara dedicada.
+  </div>
+  <button class="ov-btn" onclick="init()">ACTIVAR</button>
+  <button class="ov-btn sec" onclick="initManual()">Sin cámara / manual</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// SOLAR ALGORITHM
+// ═══════════════════════════════════════════
+const RAD = Math.PI/180, DEG = 180/Math.PI;
+const r = x => x*RAD;
+const d = x => x*DEG;
+
+function sunPosition(date, lat, lon) {
+  const JD = date/86400000 + 2440587.5;
+  const n  = JD - 2451545.0;
+  const L  = (280.460 + 0.9856474*n) % 360;
+  const g  = r((357.528 + 0.9856003*n) % 360);
+  const lam= r(L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g));
+  const eps= r(23.439 - 0.0000004*n);
+  const sinDec = Math.sin(eps)*Math.sin(lam);
+  const dec    = Math.asin(Math.max(-1,Math.min(1,sinDec)));
+  const UT  = (date % 86400000)/3600000;
+  const GMST= (6.697375 + 0.0657098242*n + UT) % 24;
+  const LMST= (GMST + lon/15 + 48) % 24;
+  const RA  = d(Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam)))/15;
+  const HA  = r(((LMST - ((RA%24+24)%24)) * 15));
+  const latR= r(lat);
+  const sinAlt = Math.sin(latR)*Math.sin(dec) + Math.cos(latR)*Math.cos(dec)*Math.cos(HA);
+  const alt = d(Math.asin(Math.max(-1,Math.min(1,sinAlt))));
+  const cosAz  = (Math.sin(dec) - Math.sin(latR)*sinAlt) / (Math.cos(latR)*Math.cos(r(alt)));
+  let az = d(Math.acos(Math.max(-1,Math.min(1,cosAz))));
+  if (Math.sin(HA) > 0) az = 360 - az;
+  return { az, alt };
+}
+
+function sunTrajectory(date, lat, lon) {
+  const start = new Date(date);
+  start.setHours(0,0,0,0);
+  const points = [];
+  for (let m = 0; m < 24*60; m += 10) {
+    const t = new Date(start.getTime() + m*60000);
+    const p = sunPosition(t, lat, lon);
+    points.push({ az: p.az, alt: p.alt, t });
+  }
+  return points;
+}
+
+// ═══════════════════════════════════════════
+// PLANNING MODE HELPERS (v0.7)
+// ═══════════════════════════════════════════
+// getCurrentDate() devuelve la fecha que el motor solar debe usar:
+//   - Modo normal (S.plan.active=false): fecha real del sistema.
+//   - Modo planificación: fecha construida desde S.plan.{date,time,tz}.
+// Centraliza los 8 puntos donde antes se llamaba a `new Date()` directamente.
+function getCurrentDate() {
+  if (!S.plan || !S.plan.active) return new Date();
+  if (!S.plan.date || !S.plan.time) return new Date();  // datos incompletos: fallback seguro
+  return planDateFromState(S.plan);
+}
+
+// planDateFromState({date,time,tz}) → Date UTC equivalente al wall-clock
+// indicado en la zona horaria dada. Maneja correctamente DST (CEST/CET, etc.)
+// usando Intl.DateTimeFormat para descubrir el offset real de esa fecha+TZ.
+//
+// Estrategia: construyo un Date "tentativo" interpretando como UTC, leo qué
+// wall-clock representa ese Date en la TZ objetivo, calculo la diferencia
+// con el wall-clock deseado y corrijo. Una sola iteración basta para zonas
+// con offset constante o transiciones DST estándar (no atravesamos la propia
+// transición — el caso patológico de "01:30 doble" es ignorado: nos quedamos
+// con la primera ocurrencia, comportamiento estándar de la mayoría de libs).
+function planDateFromState(plan) {
+  const [Y, M, D] = plan.date.split('-').map(Number);
+  const [h, m]    = plan.time.split(':').map(Number);
+  // Date "como si fuera UTC" — punto de partida.
+  const tentative = new Date(Date.UTC(Y, M-1, D, h, m, 0));
+  // ¿Qué wall-clock representa esto en la TZ objetivo?
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: plan.tz, hour12: false,
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit',
+  }).formatToParts(tentative);
+  const get = t => parseInt(parts.find(p => p.type === t).value, 10);
+  const tzWallMs = Date.UTC(get('year'), get('month')-1, get('day'),
+                            get('hour'), get('minute'), get('second'));
+  const desiredWallMs = Date.UTC(Y, M-1, D, h, m, 0);
+  // Si tentative en TZ == desiredWall, offset=0 (caso UTC). Si difiere, ajustamos.
+  const offsetMs = tzWallMs - desiredWallMs;
+  return new Date(tentative.getTime() - offsetMs);
+}
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const S = {
+  lat: 39.6953, lon: 2.9216,
+  gpsReady: false,
+  camAzRaw: 0, camAz: 0,
+  camPitchRaw: 0, camPitch: 0,    // pitch crudo del sensor → suavizado (v0.7.0+)
+  camRollRaw:  0, camRoll:  0,    // roll crudo  del sensor → suavizado (v0.7.0+)
+  camAbsolute: false, // is alpha referenced to true/magnetic north?
+  eventUsed: 'none',  // 'absolute' | 'standard' | 'none'
+  orReady: false,
+  hystFactor: 8,
+  compassOffset: 0,
+  lastSunProj: null,    // debug stash del último drawARSun (v0.7.0+)
+  debugHUD: false,      // muestra HUD diag superpuesto a la vista AR (v0.7.0+, debug)
+  invertAz: false,    // flip alpha sign for misbehaving sensors (E↔O reflected)
+  fovH: 67,           // assumed horizontal FOV
+  // Independent visibility per layer (v0.6+)
+  layers: {
+    arSun:       true,
+    arTraj:      false,
+    arEclipse:   false,
+    arHorizon:   false,
+    miniCompass: true,
+    dataBar:     true,
+  },
+  showEclipse: [false, false, false],
+  // Modo planificación (v0.7) — desactivado por defecto.
+  // Cuando active=true, getCurrentDate() devuelve un Date construido desde
+  // (date+time+tz) en lugar de new Date(). El motor de proyección 3D no se toca.
+  plan: {
+    active: false,
+    date: '',     // 'YYYY-MM-DD' (vacío = sin valor previo)
+    time: '',     // 'HH:MM'
+    tz: 'Europe/Madrid',
+  },
+};
+
+try {
+  const saved = JSON.parse(localStorage.getItem('clickpse_calib') || '{}');
+  if (typeof saved.offset === 'number') S.compassOffset = saved.offset;
+  if (typeof saved.hyst === 'number')   S.hystFactor    = saved.hyst;
+  if (typeof saved.fov === 'number')    S.fovH          = saved.fov;
+  if (typeof saved.invertAz === 'boolean') S.invertAz   = saved.invertAz;
+  if (saved.layers && typeof saved.layers === 'object') {
+    Object.keys(S.layers).forEach(k => {
+      if (typeof saved.layers[k] === 'boolean') S.layers[k] = saved.layers[k];
+    });
+  } else {
+    // Migración desde v0.5 (showAR + showTraj globales)
+    if (typeof saved.showAR === 'boolean') {
+      S.layers.arSun = S.layers.arEclipse = S.layers.arHorizon = saved.showAR;
+    }
+    if (typeof saved.showTraj === 'boolean') {
+      S.layers.arTraj = saved.showTraj;
+    }
+  }
+  // Plan state (v0.7) — defensive load. Si no existe, mantiene defaults.
+  if (saved.plan && typeof saved.plan === 'object') {
+    if (typeof saved.plan.active === 'boolean') S.plan.active = saved.plan.active;
+    if (typeof saved.plan.date === 'string')    S.plan.date   = saved.plan.date;
+    if (typeof saved.plan.time === 'string')    S.plan.time   = saved.plan.time;
+    if (typeof saved.plan.tz === 'string')      S.plan.tz     = saved.plan.tz;
+  }
+} catch(e) {}
+
+// ─── ECLIPSES VISIBLES DESDE MALLORCA ─────────────────────
+// Datos: AstroMallorca (https://astromallorca.wordpress.com/) — consulta 2026-05
+// IMPORTANTE: el campo `date` es el MÁXIMO LOCAL EN PALMA (no el máximo global).
+// Versiones anteriores (≤ v0.6.4) usaban erróneamente el máximo global, lo que
+// desplazaba el marcador del sol entre 44 min y 1h 49min. Corregido en v0.7.0.
+// Las horas dentro de `phases` están en hora local oficial de Palma (CEST/CET).
+const ECLIPSES = [
+  {
+    date: new Date('2026-08-12T18:31:48Z'),   // 20:31:48 CEST en Palma
+    label:'12 AGO 2026',
+    color: '#ff4500',
+    type: 'total',
+    phases: {
+      c1Partial: '19:37:58',
+      c2Central: '20:31:00',
+      max:       '20:31:48',
+      c3Central: '20:32:36',
+      c4Partial: '20:46',     // ≈ posta de sol
+    },
+    magnitude: 1.015,
+    coverage: '100%',
+    sunAlt: 2,                // grados al máximo
+    sunAz: 287,
+    centralDur: '1m 36s',
+    notes: 'Totalidad muy próxima al ocaso, sol a ~2° sobre el horizonte oeste. Necesario horizonte oeste completamente despejado.',
+    source: 'AstroMallorca',
+  },
+  {
+    date: new Date('2027-08-02T08:58:37Z'),   // 10:58:37 CEST en Palma
+    label:'02 AGO 2027',
+    color: '#ff8800',
+    type: 'parcial',
+    phases: {
+      c1Partial: '09:49:36',
+      c2Central: null,
+      max:       '10:58:37',
+      c3Central: null,
+      c4Partial: '12:13:06',
+    },
+    magnitude: 0.90,
+    coverage: '~89-90%',
+    sunAlt: 46,
+    sunAz: 107,
+    centralDur: null,
+    notes: 'Parcial muy profundo en pleno matín de verano. Sol alto, sin problemas de horizonte. Filtro homologado obligatorio durante TODAS las fases.',
+    source: 'AstroMallorca',
+  },
+  {
+    date: new Date('2028-01-26T16:57:00Z'),   // 17:57 CET en Palma
+    label:'26 ENE 2028',
+    color: '#ffcc00',
+    type: 'anular',
+    phases: {
+      c1Partial: '16:41',
+      c2Central: '17:55',
+      max:       '17:57',
+      c3Central: '18:00',
+      c4Partial: '18:01',     // ≈ posta de sol
+    },
+    magnitude: 0.923,
+    coverage: '~92%',
+    sunAlt: null,             // muy bajo, oeste, sin valor exacto en fuente
+    sunAz: null,
+    centralDur: '5m 16s',
+    notes: 'Anularidad al ocaso, sol muy bajo. Anillo de fuego difuso por refracción atmosférica. NUNCA quitar el filtro: la Luna no cubre el Sol completamente en ningún momento.',
+    source: 'AstroMallorca',
+  },
+];
+
+function saveCalib() {
+  localStorage.setItem('clickpse_calib', JSON.stringify({
+    offset:   S.compassOffset,
+    hyst:     S.hystFactor,
+    fov:      S.fovH,
+    invertAz: S.invertAz,
+    layers:   S.layers,
+    plan:     S.plan,
+  }));
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  document.getElementById('overlay').classList.add('gone');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width:{ideal:1920}, height:{ideal:1080} },
+      audio: false
+    });
+    const vid = document.getElementById('video');
+    vid.srcObject = stream;
+    vid.onloadedmetadata = () => vid.classList.add('active');
+  } catch(e) { console.warn('Camera denied:', e); }
+  startSensors();
+}
+
+function initManual() {
+  document.getElementById('overlay').classList.add('gone');
+  S.gpsReady = true;
+  setLocLabel('📍 Mallorca (manual)');
+  startSensors();
+}
+
+// Helper: update GPS label without losing the build stamp
+function setLocLabel(text) {
+  const stamp = ' <span id="buildStamp" style="opacity:0.5; margin-left:6px;">v0.7.0</span>';
+  document.getElementById('locLabel').innerHTML = text + stamp;
+}
+
+function startSensors() {
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(p => {
+      S.lat = p.coords.latitude;
+      S.lon = p.coords.longitude;
+      S.gpsReady = true;
+      document.getElementById('dot').classList.add('on');
+      setLocLabel(`📍 ${S.lat.toFixed(3)}°N ${S.lon.toFixed(3)}°E`);
+    }, () => {
+      S.gpsReady = true;
+      setLocLabel('📍 Mallorca (aprox.)');
+    }, { enableHighAccuracy:true, maximumAge:20000 });
+  }
+
+  // Prefer absolute event if available
+  let absoluteFired = false;
+
+  const handlerAbs = evt => {
+    absoluteFired = true;
+    processOrientation(evt, 'absolute');
+  };
+
+  const handlerStd = evt => {
+    if (absoluteFired) return; // prefer absolute
+    processOrientation(evt, 'standard');
+  };
+
+  if ('ondeviceorientationabsolute' in window) {
+    window.addEventListener('deviceorientationabsolute', handlerAbs, true);
+  }
+  window.addEventListener('deviceorientation', handlerStd, true);
+
+  highlightHyst();
+  highlightFov();
+  highlightInvert();
+  applyLayerVisibility();
+  loop();
+  setInterval(checkBrujulaWarn, 1500);
+}
+
+function processOrientation(evt, type) {
+  let alpha = evt.alpha;
+  let beta  = evt.beta;
+  let gamma = evt.gamma;
+
+  // iOS-style true heading
+  if (typeof evt.webkitCompassHeading === 'number') {
+    alpha = evt.webkitCompassHeading;
+    S.camAbsolute = true;
+  } else {
+    S.camAbsolute = !!evt.absolute;
+  }
+
+  if (alpha === null || alpha === undefined) return;
+
+  S.camAzRaw = (alpha + 360) % 360;
+  if (beta  !== null) S.camPitchRaw = beta;   // -180..180, 0=flat face up, 90=portrait vertical
+  if (gamma !== null) S.camRollRaw  = gamma;
+  S.eventUsed = type;
+  S.orReady = true;
+}
+
+function checkBrujulaWarn() {
+  const banner = document.getElementById('warnBanner');
+  const text = document.getElementById('warnText');
+  const dot = document.getElementById('dot');
+
+  if (!S.orReady) {
+    banner.classList.remove('visible');
+    return;
+  }
+
+  if (!S.camAbsolute) {
+    text.textContent = '⚠ Brújula no absoluta — calibra el móvil o usa AL SOL';
+    banner.classList.add('visible');
+    dot.classList.add('warn');
+  } else {
+    banner.classList.remove('visible');
+    dot.classList.remove('warn');
+  }
+}
+
+// ═══════════════════════════════════════════
+// HYSTERESIS
+// ═══════════════════════════════════════════
+function smoothAngle(current, target, factor) {
+  let delta = ((target - current + 540) % 360) - 180;
+  return (current + delta / factor + 360) % 360;
+}
+
+// Filtro paso-bajo lineal de un polo (v0.7.0+).
+// Para señales NO circulares: pitch (-180..180 sin wrap útil) y roll.
+// Misma constante que smoothAngle (1/factor por frame) para que el factor
+// del slider se sienta coherente entre azimut y pitch/roll.
+function smoothLinear(current, target, factor) {
+  return current + (target - current) / factor;
+}
+
+function angleDiff(a, b) {
+  return ((a - b) + 540) % 360 - 180;
+}
+
+// ═══════════════════════════════════════════
+// AR PROJECTION
+// ═══════════════════════════════════════════
+// Camera azimuth = S.camAz. Camera pitch = derived from beta.
+// When phone is held vertical (portrait taking landscape sky), beta ~90°,
+// then "up tilt" of camera = beta - 90°.
+// We project (objAz, objAlt) → (x,y) on screen using a pinhole model.
+
+// ─── 3D PROJECTION MODEL (v0.6.4, validado en producción) ─
+// Full rotation pipeline based on W3C DeviceOrientation spec.
+//
+// Reference frames:
+//   EARTH (ENU):  X=East, Y=North, Z=Up
+//   DEVICE:       X=right edge of screen, Y=top of screen, Z=out of screen (toward face)
+//   CAMERA:       camera back-lens looks along -Z of device
+//
+// W3C DeviceOrientation rotation order (intrinsic Tait-Bryan, ZX'Y''):
+//   1. Rotate by alpha around Z (yaw)
+//   2. Rotate by beta around X' (pitch)
+//   3. Rotate by gamma around Y'' (roll)
+// The combined matrix R = Rz(α) · Rx(β) · Ry(γ) takes a vector from
+// the device frame to the earth frame.  We need the inverse: earth → device.
+//
+// Spec: alpha is measured CW from North looking down (= -Z_earth).
+// We'll compute everything in radians.
+
+function getCameraPitch() {
+  // Legacy helper kept for the tiny mini-compass arrow indicator only.
+  return S.camPitch - 90;
+}
+
+function projectAzAlt(objAz, objAlt) {
+  const W = arCanvas.width;
+  const H = arCanvas.height;
+
+  // 1. Sun vector in EARTH frame (ENU)
+  const azR  = r(objAz);
+  const altR = r(objAlt);
+  const cosAlt = Math.cos(altR);
+  const sx = Math.sin(azR) * cosAlt;   // East
+  const sy = Math.cos(azR) * cosAlt;   // North
+  const sz = Math.sin(altR);           // Up
+
+  // 2. Sensor angles (camAz already includes invertAz + offset + smoothing).
+  // Compass azimuth is clockwise from North, but mathematical rotation
+  // matrices use anti-clockwise convention. So we negate alpha for Rz.
+  const a = r(-S.camAz);
+  const b = r(S.camPitch);
+  const g = r(S.camRoll);
+
+  // 3. Build R = Rz(a) · Rx(b) · Ry(g)  (device→earth)
+  //    We want R^T (earth→device) to apply to the sun vector.
+  const ca=Math.cos(a), sa=Math.sin(a);
+  const cb=Math.cos(b), sb=Math.sin(b);
+  const cg=Math.cos(g), sg=Math.sin(g);
+
+  // R^T directly (transpose of Rz·Rx·Ry):
+  // Row 0 (X_dev component):
+  const r00 =  ca*cg - sa*sb*sg;
+  const r01 =  sa*cg + ca*sb*sg;
+  const r02 = -cb*sg;
+  // Row 1 (Y_dev):
+  const r10 = -sa*cb;
+  const r11 =  ca*cb;
+  const r12 =  sb;
+  // Row 2 (Z_dev):
+  const r20 =  ca*sg + sa*sb*cg;
+  const r21 =  sa*sg - ca*sb*cg;
+  const r22 =  cb*cg;
+
+  // 4. Vector in DEVICE frame
+  const dx = r00*sx + r01*sy + r02*sz;
+  const dy = r10*sx + r11*sy + r12*sz;
+  const dz = r20*sx + r21*sy + r22*sz;
+
+  // 5. Map DEVICE → CAMERA (back camera looks along -Z_device).
+  //    In camera frame: Xc = right, Yc = up, Zc = forward (out of camera).
+  //    Right of camera = right of device   →  Xc =  dx
+  //    Up of camera    = top of device     →  Yc =  dy
+  //    Forward camera  = -Z_device         →  Zc = -dz
+  let cx = dx, cy = dy, cz = -dz;
+
+  // Behind the camera? bail out
+  if (cz <= 0.001) {
+    return { x: -9999, y: -9999, visible: false, dAz: 180, dAlt: 0 };
+  }
+
+  // 6. Pinhole projection
+  // FOV horizontal applies to the *shorter* screen dimension when in portrait
+  // (the camera sensor's horizontal FOV, applied to the screen's width).
+  const aspect = H / W;
+  const fovH = r(S.fovH);
+  const halfTanH = Math.tan(fovH / 2);
+  const halfTanV = halfTanH * aspect;
+
+  const ndcX =  cx / cz / halfTanH;   // -1..+1 across width
+  const ndcY =  cy / cz / halfTanV;   // -1..+1 across height (Y up)
+
+  const x = W * (0.5 + ndcX * 0.5);
+  const y = H * (0.5 - ndcY * 0.5);   // canvas Y goes down
+
+  const visible = Math.abs(ndcX) < 1.05 && Math.abs(ndcY) < 1.05;
+
+  // dAz/dAlt for legacy callers (e.g., off-screen arrow direction)
+  const dAz  = d(Math.atan2(cx, cz));
+  const dAlt = d(Math.asin(Math.max(-1, Math.min(1, cy))));
+
+  return { x, y, visible, dAz, dAlt, ndcX, ndcY, W, H };
+}
+
+// ═══════════════════════════════════════════
+// CANVAS — AR overlay
+// ═══════════════════════════════════════════
+const arCanvas = document.getElementById('arCanvas');
+const arCtx    = arCanvas.getContext('2d');
+
+const compassCanvas = document.getElementById('compassCanvasReal');
+const cCtx          = compassCanvas.getContext('2d');
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  arCanvas.width  = window.innerWidth  * dpr;
+  arCanvas.height = window.innerHeight * dpr;
+  arCanvas.style.width  = window.innerWidth  + 'px';
+  arCanvas.style.height = window.innerHeight + 'px';
+  arCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Compass mini canvas
+  const wrap = document.getElementById('compassMini');
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  compassCanvas.width  = w * dpr;
+  compassCanvas.height = h * dpr;
+  cCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => setTimeout(resize, 50));
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+setTimeout(resize, 100);
+
+// ═══════════════════════════════════════════
+// AR DRAW
+// ═══════════════════════════════════════════
+function drawAR(sol) {
+  const W = window.innerWidth, H = window.innerHeight;
+  arCtx.clearRect(0, 0, W, H);
+
+  // Trajectory of TODAY
+  if (S.layers.arTraj && S.gpsReady) {
+    const traj = sunTrajectory(getCurrentDate(), S.lat, S.lon);
+    drawARTrajectory(traj, '#ffb700', 0.5, true);
+  }
+
+  // Eclipse trajectories
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const traj = sunTrajectory(ECLIPSES[i].date, S.lat, S.lon);
+      drawARTrajectory(traj, ECLIPSES[i].color, 0.7, false);
+    });
+  }
+
+  // Sun (current)
+  if (S.layers.arSun) {
+    drawARSun(sol, '#ffb700');
+  }
+
+  // Eclipse sun positions
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const epos = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+      drawAREclipse(epos, ECLIPSES[i].color, ECLIPSES[i].label);
+    });
+  }
+
+  // Horizon line
+  if (S.layers.arHorizon) {
+    drawARHorizon();
+  }
+}
+
+function drawARTrajectory(traj, color, alpha, hourMarks) {
+  const pts = [];
+  let lastVisible = false;
+
+  arCtx.beginPath();
+  let started = false;
+  traj.forEach(p => {
+    if (p.alt < -2) { started = false; return; }
+    const proj = projectAzAlt(p.az, p.alt);
+    if (!proj.visible) { started = false; return; }
+    if (!started) { arCtx.moveTo(proj.x, proj.y); started = true; }
+    else arCtx.lineTo(proj.x, proj.y);
+    pts.push({ ...proj, t: p.t, alt: p.alt });
+  });
+  arCtx.strokeStyle = color;
+  arCtx.globalAlpha = alpha;
+  arCtx.lineWidth = 2.5;
+  arCtx.setLineDash([4, 6]);
+  arCtx.stroke();
+  arCtx.setLineDash([]);
+  arCtx.globalAlpha = 1;
+
+  // Hour marks
+  if (hourMarks) {
+    arCtx.font = `12px Share Tech Mono, monospace`;
+    arCtx.textAlign = 'left'; arCtx.textBaseline = 'middle';
+    pts.forEach(p => {
+      const minutes = p.t.getHours()*60 + p.t.getMinutes();
+      if (minutes % 60 !== 0) return;
+      arCtx.beginPath();
+      arCtx.arc(p.x, p.y, 3, 0, Math.PI*2);
+      arCtx.fillStyle = color;
+      arCtx.globalAlpha = alpha * 1.4;
+      arCtx.fill();
+      arCtx.globalAlpha = alpha;
+      arCtx.fillText(p.t.getHours() + 'h', p.x + 8, p.y);
+      arCtx.globalAlpha = 1;
+    });
+  }
+}
+
+function drawARSun(sol, color) {
+  const proj = projectAzAlt(sol.az, sol.alt);
+  // Stash debug: datos del sol para HUD diag (v0.7.0+).
+  S.lastSunProj = { ...proj, sunAz: sol.az, sunAlt: sol.alt };
+  if (!proj.visible) {
+    drawOffscreenIndicator(proj, color, '☀');
+    return;
+  }
+  const { x, y } = proj;
+  const below = sol.alt < 0;
+
+  if (!below) {
+    const grd = arCtx.createRadialGradient(x, y, 0, x, y, 80);
+    grd.addColorStop(0, color + '55');
+    grd.addColorStop(1, color + '00');
+    arCtx.beginPath(); arCtx.arc(x, y, 80, 0, Math.PI*2);
+    arCtx.fillStyle = grd; arCtx.fill();
+
+    const t = Date.now() / 1000;
+    const pr = 28 + 6 * Math.sin(t * 2);
+    arCtx.beginPath(); arCtx.arc(x, y, pr, 0, Math.PI*2);
+    arCtx.strokeStyle = color + '88';
+    arCtx.lineWidth = 2;
+    arCtx.stroke();
+  }
+
+  // Marker ring
+  arCtx.beginPath();
+  arCtx.arc(x, y, 18, 0, Math.PI*2);
+  arCtx.strokeStyle = color;
+  arCtx.lineWidth = 2.5;
+  arCtx.globalAlpha = below ? 0.4 : 1;
+  arCtx.stroke();
+
+  // Center dot
+  arCtx.beginPath();
+  arCtx.arc(x, y, 5, 0, Math.PI*2);
+  arCtx.fillStyle = color;
+  arCtx.fill();
+
+  // Crosshair
+  arCtx.beginPath();
+  arCtx.moveTo(x - 30, y); arCtx.lineTo(x - 22, y);
+  arCtx.moveTo(x + 22, y); arCtx.lineTo(x + 30, y);
+  arCtx.moveTo(x, y - 30); arCtx.lineTo(x, y - 22);
+  arCtx.moveTo(x, y + 22); arCtx.lineTo(x, y + 30);
+  arCtx.strokeStyle = color;
+  arCtx.lineWidth = 1.5;
+  arCtx.stroke();
+
+  arCtx.globalAlpha = 1;
+}
+
+function drawAREclipse(pos, color, label) {
+  const proj = projectAzAlt(pos.az, pos.alt);
+  if (!proj.visible) {
+    drawOffscreenIndicator(proj, color, '◉');
+    return;
+  }
+  const { x, y } = proj;
+  const below = pos.alt < 0;
+
+  arCtx.globalAlpha = below ? 0.4 : 1;
+
+  // Outer ring
+  arCtx.beginPath();
+  arCtx.arc(x, y, 22, 0, Math.PI*2);
+  arCtx.strokeStyle = color;
+  arCtx.lineWidth = 2.5;
+  arCtx.stroke();
+
+  // Inner ring
+  arCtx.beginPath();
+  arCtx.arc(x, y, 14, 0, Math.PI*2);
+  arCtx.strokeStyle = color;
+  arCtx.lineWidth = 1;
+  arCtx.stroke();
+
+  // Center
+  arCtx.beginPath();
+  arCtx.arc(x, y, 4, 0, Math.PI*2);
+  arCtx.fillStyle = color;
+  arCtx.fill();
+
+  // Crosshair
+  arCtx.beginPath();
+  arCtx.moveTo(x - 36, y); arCtx.lineTo(x - 26, y);
+  arCtx.moveTo(x + 26, y); arCtx.lineTo(x + 36, y);
+  arCtx.moveTo(x, y - 36); arCtx.lineTo(x, y - 26);
+  arCtx.moveTo(x, y + 26); arCtx.lineTo(x, y + 36);
+  arCtx.strokeStyle = color;
+  arCtx.lineWidth = 1.5;
+  arCtx.stroke();
+
+  // Label background pill
+  arCtx.font = 'bold 11px Share Tech Mono, monospace';
+  arCtx.textBaseline = 'middle';
+  arCtx.textAlign = 'left';
+  const parts = label.split(' ');
+  const txt = parts[0] + ' ' + parts[1];
+  const tw = arCtx.measureText(txt).width;
+  arCtx.fillStyle = 'rgba(6,8,16,0.7)';
+  arCtx.fillRect(x + 28, y - 8, tw + 8, 16);
+  arCtx.fillStyle = color;
+  arCtx.fillText(txt, x + 32, y);
+
+  arCtx.globalAlpha = 1;
+}
+
+function drawARHorizon() {
+  // Horizon: a line where alt=0 across full visible azimuth
+  const W = window.innerWidth, H = window.innerHeight;
+  const camAz = S.camAz;
+  const points = [];
+  for (let a = -90; a <= 90; a += 5) {
+    const objAz = (camAz + a + 360) % 360;
+    const proj = projectAzAlt(objAz, 0);
+    if (proj.visible) points.push(proj);
+  }
+  if (points.length < 2) return;
+
+  arCtx.beginPath();
+  arCtx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) arCtx.lineTo(points[i].x, points[i].y);
+  arCtx.strokeStyle = 'rgba(0,229,160,0.25)';
+  arCtx.lineWidth = 1;
+  arCtx.setLineDash([2, 4]);
+  arCtx.stroke();
+  arCtx.setLineDash([]);
+}
+
+function drawOffscreenIndicator(proj, color, symbol) {
+  // Off-screen objects: draw arrow at edge pointing toward them
+  const W = window.innerWidth, H = window.innerHeight;
+  const dAz = proj.dAz;     // positive = right
+  const dAlt = proj.dAlt;   // positive = up
+
+  // Choose edge based on which axis is more out
+  const edgeMargin = 30;
+  let x, y;
+
+  if (Math.abs(dAz) > S.fovH/2 || Math.abs(dAlt) > 50) {
+    // Project to edge of screen using direction
+    const angle = Math.atan2(-dAlt, dAz); // screen Y inverted
+    const cx = W/2, cy = H/2;
+    const r = Math.min(W, H) / 2 - edgeMargin;
+    x = cx + r * Math.cos(angle);
+    y = cy + r * Math.sin(angle);
+
+    arCtx.save();
+    arCtx.translate(x, y);
+    arCtx.rotate(angle);
+
+    // Triangle
+    arCtx.beginPath();
+    arCtx.moveTo(12, 0);
+    arCtx.lineTo(-8, -8);
+    arCtx.lineTo(-8, 8);
+    arCtx.closePath();
+    arCtx.fillStyle = color;
+    arCtx.globalAlpha = 0.85;
+    arCtx.fill();
+
+    arCtx.restore();
+    arCtx.globalAlpha = 1;
+
+    // Symbol
+    arCtx.font = '14px serif';
+    arCtx.textAlign = 'center';
+    arCtx.textBaseline = 'middle';
+    arCtx.fillStyle = color;
+    arCtx.fillText(symbol, x - 18*Math.cos(angle), y - 18*Math.sin(angle));
+  }
+}
+
+// ═══════════════════════════════════════════
+// MINI COMPASS (bottom-left)
+// ═══════════════════════════════════════════
+function drawCompassMini(sol) {
+  const wrap = document.getElementById('compassMini');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (W === 0) return;
+  const cx = W/2, cy = H/2;
+  const R  = Math.min(W, H)/2 * 0.92;
+
+  cCtx.clearRect(0, 0, W, H);
+
+  // Background circle
+  cCtx.beginPath();
+  cCtx.arc(cx, cy, R, 0, Math.PI*2);
+  cCtx.fillStyle = 'rgba(6,8,16,0.65)';
+  cCtx.fill();
+  cCtx.strokeStyle = 'rgba(255,255,255,0.18)';
+  cCtx.lineWidth = 1.5; cCtx.stroke();
+
+  // Rotated ring
+  cCtx.save();
+  cCtx.translate(cx, cy);
+  cCtx.rotate(r(-S.camAz));
+  cCtx.translate(-cx, -cy);
+
+  // Ticks
+  for (let deg = 0; deg < 360; deg += 30) {
+    const ang = r(deg - 90);
+    const r1 = R, r2 = R - (deg % 90 === 0 ? 8 : 5);
+    cCtx.beginPath();
+    cCtx.moveTo(cx + r1*Math.cos(ang), cy + r1*Math.sin(ang));
+    cCtx.lineTo(cx + r2*Math.cos(ang), cy + r2*Math.sin(ang));
+    cCtx.strokeStyle = deg % 90 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)';
+    cCtx.lineWidth = 1; cCtx.stroke();
+  }
+
+  // Today trajectory
+  if (S.layers.arTraj && S.gpsReady) {
+    const traj = sunTrajectory(getCurrentDate(), S.lat, S.lon);
+    cCtx.beginPath();
+    let started = false;
+    traj.forEach(p => {
+      if (p.alt < -5) { started = false; return; }
+      const xy = miniXY(p.az, p.alt, cx, cy, R);
+      if (!started) { cCtx.moveTo(xy.x, xy.y); started = true; }
+      else cCtx.lineTo(xy.x, xy.y);
+    });
+    cCtx.strokeStyle = 'rgba(255,183,0,0.5)';
+    cCtx.lineWidth = 1;
+    cCtx.setLineDash([2, 3]); cCtx.stroke(); cCtx.setLineDash([]);
+  }
+
+  // Eclipse trajectories
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const traj = sunTrajectory(ECLIPSES[i].date, S.lat, S.lon);
+      cCtx.beginPath();
+      let started = false;
+      traj.forEach(p => {
+        if (p.alt < -5) { started = false; return; }
+        const xy = miniXY(p.az, p.alt, cx, cy, R);
+        if (!started) { cCtx.moveTo(xy.x, xy.y); started = true; }
+        else cCtx.lineTo(xy.x, xy.y);
+      });
+      cCtx.strokeStyle = ECLIPSES[i].color + '88';
+      cCtx.lineWidth = 1;
+      cCtx.setLineDash([2, 3]); cCtx.stroke(); cCtx.setLineDash([]);
+    });
+  }
+
+  // Cardinals
+  const cards = [{l:'N',d:0,col:'#ff4500'},{l:'E',d:90,col:'rgba(200,220,240,0.7)'},{l:'S',d:180,col:'rgba(200,220,240,0.7)'},{l:'O',d:270,col:'rgba(200,220,240,0.7)'}];
+  cCtx.font = `bold ${R*0.22}px Orbitron, sans-serif`;
+  cCtx.textAlign='center'; cCtx.textBaseline='middle';
+  cards.forEach(card => {
+    const ang = r(card.d - 90);
+    const rr = R - 11;
+    const x = cx + rr*Math.cos(ang), y = cy + rr*Math.sin(ang);
+    cCtx.save();
+    cCtx.translate(x, y);
+    cCtx.rotate(r(S.camAz));
+    cCtx.fillStyle = card.col;
+    cCtx.fillText(card.l, 0, 0);
+    cCtx.restore();
+  });
+
+  cCtx.restore();
+
+  // Sun
+  const xy = miniXY(sol.az, sol.alt, cx, cy, R);
+  const below = sol.alt < 0;
+  if (!below) {
+    cCtx.beginPath(); cCtx.arc(xy.x, xy.y, R*0.18, 0, Math.PI*2);
+    const grd = cCtx.createRadialGradient(xy.x, xy.y, 0, xy.x, xy.y, R*0.18);
+    grd.addColorStop(0, 'rgba(255,183,0,0.5)');
+    grd.addColorStop(1, 'transparent');
+    cCtx.fillStyle = grd; cCtx.fill();
+  }
+  cCtx.beginPath(); cCtx.arc(xy.x, xy.y, R*0.07, 0, Math.PI*2);
+  cCtx.fillStyle = below ? '#4a3200' : '#ffb700';
+  cCtx.globalAlpha = below ? 0.3 : 1;
+  cCtx.fill(); cCtx.globalAlpha = 1;
+
+  // Eclipse markers
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const ep = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+      const exy = miniXY(ep.az, ep.alt, cx, cy, R);
+      cCtx.beginPath();
+      cCtx.arc(exy.x, exy.y, R*0.10, 0, Math.PI*2);
+      cCtx.strokeStyle = ECLIPSES[i].color;
+      cCtx.lineWidth = 1.5;
+      cCtx.stroke();
+      cCtx.beginPath();
+      cCtx.arc(exy.x, exy.y, R*0.035, 0, Math.PI*2);
+      cCtx.fillStyle = ECLIPSES[i].color;
+      cCtx.fill();
+    });
+  }
+
+  // Camera arrow at top
+  cCtx.save();
+  cCtx.translate(cx, cy);
+  const arrR = R - 2;
+  cCtx.beginPath();
+  cCtx.moveTo(0, -arrR);
+  cCtx.lineTo(-5, -arrR + 11);
+  cCtx.lineTo(5, -arrR + 11);
+  cCtx.closePath();
+  cCtx.fillStyle = 'rgba(0,229,160,0.85)';
+  cCtx.fill();
+  cCtx.restore();
+
+  // FOV arc
+  const fovHalfRad = r(S.fovH/2);
+  cCtx.beginPath();
+  cCtx.moveTo(cx, cy);
+  cCtx.arc(cx, cy, R*0.6, -Math.PI/2 - fovHalfRad, -Math.PI/2 + fovHalfRad);
+  cCtx.closePath();
+  cCtx.fillStyle = 'rgba(0,229,160,0.08)';
+  cCtx.fill();
+  cCtx.strokeStyle = 'rgba(0,229,160,0.3)';
+  cCtx.lineWidth = 1;
+  cCtx.stroke();
+}
+
+function miniXY(az, alt, cx, cy, R) {
+  const clamped = Math.max(-90, Math.min(90, alt));
+  const rr = R * (1 - clamped / 90);
+  const ang = r(az - 90);
+  return { x: cx + rr*Math.cos(ang), y: cy + rr*Math.sin(ang) };
+}
+
+// ═══════════════════════════════════════════
+// MAIN LOOP
+// ═══════════════════════════════════════════
+function loop() {
+  if (S.orReady) {
+    // Hipótesis A: algunos sensores entregan alpha en sentido anti-horario
+    // (E↔O reflejados). Si invertAz=true, negamos antes del offset.
+    const az = S.invertAz ? (360 - S.camAzRaw) % 360 : S.camAzRaw;
+    let target = (az + S.compassOffset + 360) % 360;
+    S.camAz = smoothAngle(S.camAz, target, S.hystFactor);
+    // Pitch y roll también filtrados (v0.7.0+). Sin esto, el cursor AR baila
+    // verticalmente porque el ruido del sensor llega crudo a la matriz de
+    // proyección 3D. Mismo factor que azimut → comportamiento coherente.
+    S.camPitch = smoothLinear(S.camPitch, S.camPitchRaw, S.hystFactor);
+    S.camRoll  = smoothLinear(S.camRoll,  S.camRollRaw,  S.hystFactor);
+  }
+
+  const sol = sunPosition(getCurrentDate(), S.lat, S.lon);
+
+  drawAR(sol);
+  drawCompassMini(sol);
+
+  document.getElementById('vAz').textContent = sol.az.toFixed(1) + '°';
+  const elStr = (sol.alt < 0 ? '↓' : '') + sol.alt.toFixed(1) + '°';
+  const elEl = document.getElementById('vEl');
+  elEl.textContent = elStr;
+  elEl.style.color = sol.alt < 0 ? 'rgba(200,220,240,0.3)' : 'var(--solar)';
+
+  const camEl = document.getElementById('vCam');
+  camEl.textContent = S.orReady ? S.camAz.toFixed(0) + '°' : '---°';
+  camEl.classList.toggle('warn', S.orReady && !S.camAbsolute);
+  camEl.classList.toggle('green', S.orReady && S.camAbsolute);
+
+  // Calibration overlay live
+  const co = document.getElementById('calibOverlay');
+  if (co.classList.contains('visible')) {
+    const sensorOk = S.orReady;
+    document.getElementById('diagSensor').textContent = sensorOk ? 'OK' : 'NO DETECTADO';
+    document.getElementById('diagSensor').className = 'diag-val ' + (sensorOk ? 'ok' : 'warn');
+
+    document.getElementById('diagAbs').textContent = S.camAbsolute ? 'SÍ ✓' : 'NO ⚠';
+    document.getElementById('diagAbs').className = 'diag-val ' + (S.camAbsolute ? 'ok' : 'warn');
+
+    document.getElementById('diagEvent').textContent = S.eventUsed;
+    document.getElementById('diagEvent').className = 'diag-val ' +
+      (S.eventUsed === 'absolute' ? 'ok' : S.eventUsed === 'standard' ? 'warn' : '');
+
+    document.getElementById('cRaw').textContent = S.camAzRaw.toFixed(1) + '°';
+    document.getElementById('cFinal').textContent = S.camAz.toFixed(1) + '°';
+    document.getElementById('diagBeta').textContent  = S.camPitch.toFixed(1) + '°';
+    document.getElementById('diagGamma').textContent = S.camRoll.toFixed(1) + '°';
+    document.getElementById('cOffset').textContent = S.compassOffset.toFixed(1) + '°';
+    const invEl = document.getElementById('diagInvert');
+    invEl.textContent = S.invertAz ? 'SÍ ↔' : 'NO';
+    invEl.className = 'diag-val ' + (S.invertAz ? 'warn' : '');
+    document.getElementById('diagFov').textContent = S.fovH + '°';
+    // Diagnóstico v0.7.0+ para depurar coords AR (cursor mal posicionado).
+    // Mostrar dpr nativo, dpr efectivo (cap a 2), dimensiones CSS y físicas del canvas.
+    const dprNat = (window.devicePixelRatio || 1);
+    const dprEff = Math.min(dprNat, 2);
+    document.getElementById('diagDPR').textContent =
+      dprNat.toFixed(2) + '/' + dprEff.toFixed(0) + ' · ' +
+      window.innerWidth + '×' + window.innerHeight + ' / ' +
+      arCanvas.width + '×' + arCanvas.height;
+  }
+
+  // HUD diag superpuesto (v0.7.0+, debug del posicionamiento del cursor).
+  // Solo se actualiza si está visible (ahorra getElementById en cada frame).
+  if (S.debugHUD) {
+    const dprNat = (window.devicePixelRatio || 1);
+    const dprEff = Math.min(dprNat, 2);
+    document.getElementById('hudVP').textContent  = window.innerWidth + '×' + window.innerHeight;
+    document.getElementById('hudCV').textContent  = arCanvas.width + '×' + arCanvas.height;
+    document.getElementById('hudDPR').textContent = dprNat.toFixed(2) + '/' + dprEff.toFixed(0);
+    document.getElementById('hudCA').textContent  = S.camAz.toFixed(1) + '°';
+    document.getElementById('hudPI').textContent  = S.camPitch.toFixed(1) + '°';
+    document.getElementById('hudRO').textContent  = S.camRoll.toFixed(1) + '°';
+    document.getElementById('hudSA').textContent  = sol.az.toFixed(1) + '°';
+    document.getElementById('hudSE').textContent  = sol.alt.toFixed(1) + '°';
+    const lp = S.lastSunProj;
+    if (lp) {
+      document.getElementById('hudND').textContent =
+        lp.ndcX != null ? lp.ndcX.toFixed(2) + ',' + lp.ndcY.toFixed(2) : '-';
+      document.getElementById('hudPX').textContent =
+        lp.x != null ? lp.x.toFixed(0) + ',' + lp.y.toFixed(0) : '-';
+      // % respecto al CSS (innerWidth/Height) para que el lector pueda comparar
+      // contra dónde ve el cursor en pantalla.
+      const W = window.innerWidth, H = window.innerHeight;
+      document.getElementById('hudPC').textContent =
+        lp.x != null ? (lp.x/W*100).toFixed(0) + '%,' + (lp.y/H*100).toFixed(0) + '%' : '-';
+    }
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════
+// TOGGLES
+// ═══════════════════════════════════════════
+function toggleEclipse(i) {
+  S.showEclipse[i] = !S.showEclipse[i];
+  // Compatibilidad: si la antigua barra de etabs sigue presente (no debería en v0.7),
+  // refleja el estado allí. En v0.7 los elementos e0/e1/e2 han desaparecido y la
+  // UI vive dentro del modal Eclipses, así que comprobamos defensivamente.
+  const oldTab = document.getElementById('e'+i);
+  if (oldTab) oldTab.classList.toggle('on', S.showEclipse[i]);
+  // Si el modal Eclipses está abierto, refresca su fila para reflejar el cambio.
+  refreshEclipseRow(i);
+  // Auto-activar capa AR Eclipse cuando se enciende un eclipse (UX coherente)
+  const anyActive = S.showEclipse.some(x => x);
+  if (anyActive && !S.layers.arEclipse) {
+    S.layers.arEclipse = true;
+    applyLayerVisibility();
+    saveCalib();
+  }
+}
+
+// Refresca la fila i del modal Eclipses (si está abierto) para que el botón AR
+// y el resaltado de la fila reflejen el estado actual de S.showEclipse[i].
+// No-op si el modal no está montado.
+function refreshEclipseRow(i) {
+  const row = document.getElementById('eitem-' + i);
+  if (!row) return;
+  const on = !!S.showEclipse[i];
+  row.classList.toggle('ar-on', on);
+  const arBtn = row.querySelector('[data-act="ar"]');
+  if (arBtn) {
+    arBtn.classList.toggle('on', on);
+    arBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    arBtn.title = on ? 'Ocultar marcador AR' : 'Mostrar marcador AR';
+  }
+}
+
+function resetNow() {
+  S.showEclipse = [false, false, false];
+  // Compatibilidad con v0.6.x (etabs); en v0.7 estos getElementById devuelven null.
+  [0,1,2].forEach(i => {
+    const oldTab = document.getElementById('e'+i);
+    if (oldTab) oldTab.classList.remove('on');
+    refreshEclipseRow(i);
+  });
+}
+
+// ─── MODAL ECLIPSES (v0.7) ─────────────────────────────────
+// Etiquetas amigables por tipo (rellena el .eitem-type y el subtítulo del modal info).
+function eclipseTypeLabel(type) {
+  if (type === 'total')   return 'Total ◉';
+  if (type === 'parcial') return 'Parcial ◑';
+  if (type === 'anular')  return 'Anular ◎';
+  return type || '—';
+}
+
+// Renderiza la lista del modal Eclipses leyendo de ECLIPSES y reflejando S.showEclipse.
+// Se ejecuta en cada apertura para tener siempre estado fresco.
+function renderEclipsesModal() {
+  const list = document.getElementById('eclipsesList');
+  if (!list) return;
+  list.innerHTML = '';
+  ECLIPSES.forEach((ec, i) => {
+    const on = !!S.showEclipse[i];
+    const row = document.createElement('div');
+    row.className = 'eitem' + (on ? ' ar-on' : '');
+    row.id = 'eitem-' + i;
+    row.style.setProperty('--marker', ec.color);
+    row.innerHTML = `
+      <div class="eitem-info">
+        <div class="eitem-date">${ec.label}</div>
+        <div class="eitem-type" style="color:${ec.color}">${eclipseTypeLabel(ec.type)}</div>
+      </div>
+      <div class="eitem-actions">
+        <button class="eaction" data-act="info" onclick="openEclipseInfo(${i})" aria-label="Ver detalles" title="Ver detalles">ℹ</button>
+        <button class="eaction${on ? ' on' : ''}" data-act="ar" onclick="toggleEclipse(${i})"
+                aria-label="Marcador AR" aria-pressed="${on ? 'true' : 'false'}"
+                title="${on ? 'Ocultar marcador AR' : 'Mostrar marcador AR'}">👁</button>
+        <button class="eaction disabled" data-act="sim" onclick="simulateEclipseStub(${i})"
+                aria-label="Simular" title="Simulación (próximamente)">▶</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function openEclipsesModal() {
+  renderEclipsesModal();
+  document.getElementById('eclipsesModal').classList.add('visible');
+}
+
+function closeEclipsesModal() {
+  document.getElementById('eclipsesModal').classList.remove('visible');
+}
+
+// Stub de simulación: la simulación real se cablea en el siguiente sub-parche
+// (cuando exista el modal Planificación). Por ahora damos feedback visual y log.
+function simulateEclipseStub(i) {
+  console.log('[clickpse] simulateEclipse', i, ECLIPSES[i].label, '— pendiente para próximo parche');
+}
+
+// ─── MODAL DETALLE ECLIPSE (v0.7) ──────────────────────────
+// Renderiza el detalle del eclipse i: fases, datos, notas. Las horas en `phases`
+// ya están en hora local de Palma (CEST/CET) según la fuente AstroMallorca.
+function renderEclipseInfo(i) {
+  const ec = ECLIPSES[i];
+  if (!ec) return;
+
+  // Título y subtítulo
+  document.getElementById('einfoTitle').textContent = '🌑 ' + ec.label;
+  const sub = document.getElementById('einfoSub');
+  sub.textContent = eclipseTypeLabel(ec.type) + ' · Palma de Mallorca';
+  sub.style.color = ec.color;
+
+  // Bloque fases
+  const phasesEl = document.getElementById('einfoPhases');
+  const ph = ec.phases || {};
+  const phaseRows = [
+    ['Inicio (C1)',           ph.c1Partial],
+    ['Inicio centralidad',    ph.c2Central],
+    ['Máximo',                ph.max],
+    ['Fin centralidad',       ph.c3Central],
+    ['Fin (C4)',              ph.c4Partial],
+  ];
+  phasesEl.innerHTML = phaseRows
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `
+      <div class="einfo-row">
+        <span class="einfo-label">${k}</span>
+        <span class="einfo-val">${v}</span>
+      </div>
+    `).join('');
+
+  // Bloque datos
+  const dataEl = document.getElementById('einfoData');
+  const dataRows = [
+    ['Magnitud',          ec.magnitude != null ? ec.magnitude.toFixed(3) : null],
+    ['Cobertura',         ec.coverage],
+    ['Altura sol al máx', ec.sunAlt != null ? ec.sunAlt + '°' : null],
+    ['Azimut sol al máx', ec.sunAz  != null ? ec.sunAz  + '°' : null],
+    ['Duración central',  ec.centralDur],
+  ];
+  dataEl.innerHTML = dataRows
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `
+      <div class="einfo-row">
+        <span class="einfo-label">${k}</span>
+        <span class="einfo-val">${v}</span>
+      </div>
+    `).join('');
+
+  // Notas (texto libre de la fuente: condiciones de observación local).
+  document.getElementById('einfoNotes').textContent = ec.notes || '';
+}
+
+function openEclipseInfo(i) {
+  renderEclipseInfo(i);
+  // Cerramos el modal lista para no apilar pantallas; al volver, reabriremos lista.
+  document.getElementById('eclipsesModal').classList.remove('visible');
+  document.getElementById('eclipseInfoModal').classList.add('visible');
+}
+
+function closeEclipseInfo() {
+  document.getElementById('eclipseInfoModal').classList.remove('visible');
+  // Reabrimos el modal lista para no perder al usuario en la jerarquía.
+  openEclipsesModal();
+}
+
+// Stub: la planificación libre llega en el siguiente sub-parche. El botón está
+// disabled en HTML, así que esta función no debería invocarse por usuario; queda
+// como placeholder para no dejar onclick="openPlanModal()" sin definir.
+function openPlanModal() {
+  console.log('[clickpse] openPlanModal — pendiente para próximo parche');
+}
+
+function toggleTraj() {
+  // legacy alias kept for compatibility — now toggles arTraj layer
+  toggleLayer('arTraj');
+}
+
+function toggleAR() {
+  // legacy alias — toggles arSun (the main AR marker)
+  toggleLayer('arSun');
+}
+
+// ─── LAYERS SYSTEM (v0.6+) ─────────────────────────────────
+function toggleLayer(name) {
+  if (!(name in S.layers)) return;
+  S.layers[name] = !S.layers[name];
+  applyLayerVisibility();
+  saveCalib();
+}
+
+function applyLayerVisibility() {
+  // Update each layer-toggle button .on class
+  Object.keys(S.layers).forEach(k => {
+    const btn = document.getElementById('lyr_' + k);
+    if (btn) btn.classList.toggle('on', S.layers[k]);
+  });
+  // Mini compass DOM visibility
+  const mc = document.getElementById('compassMini');
+  if (mc) mc.classList.toggle('hidden', !S.layers.miniCompass);
+  // Data bar = the dataBar grid inside bottomPanel
+  const db = document.getElementById('dataBar');
+  if (db) db.classList.toggle('hidden', !S.layers.dataBar);
+}
+
+function toggleLayersPanel() {
+  document.getElementById('layersPanel').classList.toggle('visible');
+}
+
+// AL SOL: abre el modal de cámara con diana (v0.7)
+// Antes (v0.6): la calibración se aplicaba inmediatamente al pulsar el botón,
+// sin que el usuario pudiera ver hacia dónde apuntaba el móvil. En v0.7 se
+// pasa por un modal dedicado: cámara visible, diana central, lectura en vivo
+// y confirmación explícita. Reemplaza a quickAlSol() y autoCalibSun().
+function quickAlSol() { openSunAim(); }
+
+let _aimUpdateTimer = null;
+let _aimHiddenPanels = [];   // elementos ocultados temporalmente; se restauran al cerrar
+
+function openSunAim() {
+  const sol = sunPosition(new Date(), S.lat, S.lon);  // siempre sol real, no simulado
+  if (sol.alt < 0) {
+    // Sol bajo el horizonte: aviso visual rápido en el botón origen, no se abre modal.
+    const btn = document.getElementById('sunBtn');
+    if (btn) {
+      btn.classList.add('warn');
+      setTimeout(() => btn.classList.remove('warn'), 800);
+    }
+    // Si lo lanzamos desde el modal de calibración, también avisamos allí.
+    const calibBtn = document.querySelector('#calibOverlay .calib-btn');
+    if (calibBtn && document.getElementById('calibOverlay').classList.contains('visible')) {
+      const orig = calibBtn.textContent;
+      calibBtn.textContent = '⚠ Sol bajo horizonte';
+      setTimeout(() => { calibBtn.textContent = orig; }, 1500);
+    }
+    return;
+  }
+  // Ocultar el modal de calibración si está abierto (su fondo casi opaco
+  // tapa la cámara). Estado lógico (.visible) preservado: al cerrar el aim
+  // se restaura. layersPanel se gestiona por la clase aim-active del body
+  // (regla CSS arriba), pero también se añade aquí por consistencia.
+  _aimHiddenPanels = [];
+  ['calibOverlay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && (el.classList.contains('visible') || getComputedStyle(el).display !== 'none')) {
+      const prev = el.style.display;
+      _aimHiddenPanels.push({ el, prev });
+      el.style.display = 'none';
+    }
+  });
+  document.body.classList.add('aim-active');
+  document.getElementById('sunAimOverlay').classList.add('visible');
+  // Refresco de readout cada 100ms mientras esté visible
+  updateAimReadout();
+  _aimUpdateTimer = setInterval(updateAimReadout, 100);
+}
+
+function closeSunAim(commit) {
+  if (_aimUpdateTimer) { clearInterval(_aimUpdateTimer); _aimUpdateTimer = null; }
+  document.getElementById('sunAimOverlay').classList.remove('visible');
+  document.body.classList.remove('aim-active');
+  // Restaurar paneles ocultados
+  _aimHiddenPanels.forEach(({ el, prev }) => { el.style.display = prev || ''; });
+  _aimHiddenPanels = [];
+  if (!commit) return;
+  // Aplica calibración con la lectura ACTUAL del sensor + sol REAL.
+  const sol = sunPosition(new Date(), S.lat, S.lon);
+  if (sol.alt < 0) return;  // safety: no debería pasar (openSunAim ya lo filtra)
+  const az = S.invertAz ? (360 - S.camAzRaw) % 360 : S.camAzRaw;
+  let offset = sol.az - az;
+  while (offset > 180) offset -= 360;
+  while (offset < -180) offset += 360;
+  S.compassOffset = offset;
+  saveCalib();
+  // Flash visual de confirmación en el botón origen del header
+  const btn = document.getElementById('sunBtn');
+  if (btn) {
+    btn.classList.add('flash');
+    setTimeout(() => btn.classList.remove('flash'), 600);
+  }
+}
+
+function updateAimReadout() {
+  const sol = sunPosition(new Date(), S.lat, S.lon);  // sol real
+  const camAz = S.invertAz ? (360 - S.camAzRaw + S.compassOffset + 360) % 360
+                            : (S.camAzRaw + S.compassOffset + 360) % 360;
+  const elCam = document.getElementById('aimCamAz');
+  const elSun = document.getElementById('aimSunAzAlt');
+  const elBelowRow = document.getElementById('aimSunBelowRow');
+  const confirmBtn = document.getElementById('aimConfirmBtn');
+  if (elCam) elCam.textContent = camAz.toFixed(1) + '° / ' + S.camPitch.toFixed(1) + '°';
+  if (elSun) elSun.textContent = sol.az.toFixed(1) + '° / ' + sol.alt.toFixed(1) + '°';
+  // Si durante el aim el sol baja del horizonte (caso límite al ocaso), aviso + bloqueo
+  if (sol.alt < 0) {
+    if (elBelowRow) elBelowRow.style.display = 'flex';
+    if (confirmBtn) confirmBtn.disabled = true;
+  } else {
+    if (elBelowRow) elBelowRow.style.display = 'none';
+    if (confirmBtn) confirmBtn.disabled = false;
+  }
+}
+
+// Close layers panel when tapping outside
+document.addEventListener('click', e => {
+  const panel = document.getElementById('layersPanel');
+  const btn   = document.getElementById('layersBtn');
+  if (!panel || !panel.classList.contains('visible')) return;
+  if (panel.contains(e.target) || btn.contains(e.target)) return;
+  panel.classList.remove('visible');
+});
+
+// ═══════════════════════════════════════════
+// CALIBRATION
+// ═══════════════════════════════════════════
+function openCalib() { document.getElementById('calibOverlay').classList.add('visible'); }
+function closeCalib() { document.getElementById('calibOverlay').classList.remove('visible'); }
+
+function nudgeOffset(delta) {
+  S.compassOffset += delta;
+  while (S.compassOffset > 180) S.compassOffset -= 360;
+  while (S.compassOffset < -180) S.compassOffset += 360;
+  saveCalib();
+}
+
+function setHyst(v) {
+  S.hystFactor = v;
+  highlightHyst();
+  saveCalib();
+}
+
+// Toggle HUD diag (v0.7.0+, debug temporal). No persiste en localStorage:
+// queremos que al recargar la página vuelva a estar oculto por defecto.
+function toggleDebugHUD() {
+  S.debugHUD = !S.debugHUD;
+  const hud = document.getElementById('debugHUD');
+  if (hud) {
+    // Doble vía: clase .visible (CSS con !important) y style inline.
+    // El HTML tenía style="display:none" inline; lo limpiamos al activar.
+    hud.classList.toggle('visible', S.debugHUD);
+    hud.style.display = S.debugHUD ? 'block' : 'none';
+  }
+  const btn = document.getElementById('hudToggleBtn');
+  if (btn) btn.classList.toggle('on', S.debugHUD);
+  // Log para diagnóstico — si no aparece en consola al pulsar, el botón no
+  // está disparando (caché de página vieja, JS roto, etc.).
+  console.log('[clickpse] toggleDebugHUD →', S.debugHUD ? 'ON' : 'OFF',
+              'hud el?', !!hud, 'btn el?', !!btn);
+}
+
+function highlightHyst() {
+  ['h2','h5','h8','h15'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('on');
+  });
+  const cur = document.getElementById('h' + S.hystFactor);
+  if (cur) cur.classList.add('on');
+}
+
+function setFov(v) {
+  S.fovH = v;
+  highlightFov();
+  saveCalib();
+}
+
+function highlightFov() {
+  ['f60','f67','f75','f85'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('on');
+  });
+  const cur = document.getElementById('f' + S.fovH);
+  if (cur) cur.classList.add('on');
+}
+
+// autoCalibSun: mantenido como alias de openSunAim para compatibilidad si
+// se llamara desde otro sitio. En v0.7 todas las rutas usan el mismo modal.
+function autoCalibSun() { openSunAim(); }
+
+function toggleInvertAz() {
+  S.invertAz = !S.invertAz;
+  // Cambiar la inversión equivale a una reflexión: el offset previo
+  // ya no es válido. Se resetea para que el usuario recalibre limpiamente.
+  S.compassOffset = 0;
+  saveCalib();
+  highlightInvert();
+}
+
+function highlightInvert() {
+  const btn = document.getElementById('invBtn');
+  if (!btn) return;
+  btn.classList.toggle('on', S.invertAz);
+  btn.textContent = S.invertAz ? '✓ Azimut invertido (E↔O)' : '↔ Invertir azimut';
+}
+
+function resetCalib() {
+  S.compassOffset = 0;
+  saveCalib();
+}
+
+// ═══════════════════════════════════════════
+// PHOTO CAPTURE
+// ═══════════════════════════════════════════
+let capturedDataUrl = null;
+
+function capturePhoto() {
+  const vid = document.getElementById('video');
+  const cap = document.getElementById('captureCanvas');
+  const sol = sunPosition(getCurrentDate(), S.lat, S.lon);
+
+  const flash = document.getElementById('flashOverlay');
+  flash.classList.add('flash');
+  setTimeout(() => flash.classList.remove('flash'), 150);
+
+  const vw = vid.videoWidth || window.innerWidth;
+  const vh = vid.videoHeight || window.innerHeight;
+  cap.width = vw; cap.height = vh;
+  const c = cap.getContext('2d');
+
+  if (vid.readyState >= 2) c.drawImage(vid, 0, 0, vw, vh);
+  else { c.fillStyle = '#060810'; c.fillRect(0, 0, vw, vh); }
+
+  // ── BURN AR LAYER on capture ──
+  // Re-project using 3D rotation pipeline (same as live AR, but at video size)
+  const drawProj = (objAz, objAlt) => {
+    const azR = r(objAz), altR = r(objAlt);
+    const cosAlt = Math.cos(altR);
+    const sx = Math.sin(azR) * cosAlt;
+    const sy = Math.cos(azR) * cosAlt;
+    const sz = Math.sin(altR);
+
+    const a = r(-S.camAz), b = r(S.camPitch), gg = r(S.camRoll);
+    const ca=Math.cos(a), saA=Math.sin(a);
+    const cb=Math.cos(b), sb=Math.sin(b);
+    const cg=Math.cos(gg), sg=Math.sin(gg);
+
+    const r00 =  ca*cg - saA*sb*sg;
+    const r01 =  saA*cg + ca*sb*sg;
+    const r02 = -cb*sg;
+    const r10 = -saA*cb;
+    const r11 =  ca*cb;
+    const r12 =  sb;
+    const r20 =  ca*sg + saA*sb*cg;
+    const r21 =  saA*sg - ca*sb*cg;
+    const r22 =  cb*cg;
+
+    const dx = r00*sx + r01*sy + r02*sz;
+    const dy = r10*sx + r11*sy + r12*sz;
+    const dz = r20*sx + r21*sy + r22*sz;
+
+    const cxV = dx, cyV = dy, czV = -dz;
+    if (czV <= 0.001) return { x: -9999, y: -9999, visible: false };
+
+    const aspect = vh / vw;
+    const halfTanH = Math.tan(r(S.fovH) / 2);
+    const halfTanV = halfTanH * aspect;
+
+    const ndcX = cxV / czV / halfTanH;
+    const ndcY = cyV / czV / halfTanV;
+
+    const x = vw * (0.5 + ndcX * 0.5);
+    const y = vh * (0.5 - ndcY * 0.5);
+    const visible = Math.abs(ndcX) < 1.05 && Math.abs(ndcY) < 1.05;
+    return { x, y, visible };
+  };
+
+  // Sun marker on capture
+  if (S.layers.arSun) {
+    const sp = drawProj(sol.az, sol.alt);
+    if (sp.visible && sol.alt > -2) {
+      c.beginPath();
+      c.arc(sp.x, sp.y, 30, 0, Math.PI*2);
+      c.strokeStyle = '#ffb700';
+      c.lineWidth = 3;
+      c.stroke();
+      c.beginPath();
+      c.arc(sp.x, sp.y, 6, 0, Math.PI*2);
+      c.fillStyle = '#ffb700';
+      c.fill();
+      // crosshair
+      c.beginPath();
+      c.moveTo(sp.x - 50, sp.y); c.lineTo(sp.x - 38, sp.y);
+      c.moveTo(sp.x + 38, sp.y); c.lineTo(sp.x + 50, sp.y);
+      c.moveTo(sp.x, sp.y - 50); c.lineTo(sp.x, sp.y - 38);
+      c.moveTo(sp.x, sp.y + 38); c.lineTo(sp.x, sp.y + 50);
+      c.strokeStyle = '#ffb700';
+      c.lineWidth = 2;
+      c.stroke();
+    }
+  }
+
+  // Eclipse markers
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const ep = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+      const ex = drawProj(ep.az, ep.alt);
+      if (ex.visible && ep.alt > -2) {
+        c.beginPath(); c.arc(ex.x, ex.y, 36, 0, Math.PI*2);
+        c.strokeStyle = ECLIPSES[i].color; c.lineWidth = 3; c.stroke();
+        c.beginPath(); c.arc(ex.x, ex.y, 6, 0, Math.PI*2);
+        c.fillStyle = ECLIPSES[i].color; c.fill();
+        c.font = 'bold 22px Share Tech Mono, monospace';
+        c.textBaseline = 'middle'; c.textAlign = 'left';
+        c.fillStyle = 'rgba(6,8,16,0.7)';
+        const txt = ECLIPSES[i].label;
+        const tw = c.measureText(txt).width;
+        c.fillRect(ex.x + 44, ex.y - 14, tw + 12, 28);
+        c.fillStyle = ECLIPSES[i].color;
+        c.fillText(txt, ex.x + 50, ex.y);
+      }
+    });
+  }
+
+  // Trajectory of today
+  if (S.layers.arTraj && S.gpsReady) {
+    const traj = sunTrajectory(getCurrentDate(), S.lat, S.lon);
+    c.beginPath();
+    let started = false;
+    traj.forEach(p => {
+      if (p.alt < -2) { started = false; return; }
+      const xy = drawProj(p.az, p.alt);
+      if (!xy.visible) { started = false; return; }
+      if (!started) { c.moveTo(xy.x, xy.y); started = true; }
+      else c.lineTo(xy.x, xy.y);
+    });
+    c.strokeStyle = '#ffb700'; c.globalAlpha = 0.6;
+    c.lineWidth = 4; c.setLineDash([6, 8]); c.stroke();
+    c.setLineDash([]); c.globalAlpha = 1;
+  }
+
+  // ── DATA BAR ── stable layout: 2 rows (label / value), 3 slots con separadores
+  if (S.layers.dataBar) {
+    const isPortrait = vh > vw;
+    const barH = isPortrait ? vh * 0.085 : vh * 0.10;
+    c.fillStyle = 'rgba(6,8,16,0.88)';
+    c.fillRect(0, vh - barH, vw, barH);
+
+    const padX = vw * 0.025;
+
+    // ── Left block: logo (top) + timestamp (bottom) ──
+    const logoFs = barH * 0.40;
+    c.font = `bold ${logoFs}px Orbitron, sans-serif`;
+    c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    c.fillStyle = '#ffb700';
+    const logoY = vh - barH * 0.42;
+    c.fillText('CLICK', padX, logoY);
+    const clickW = c.measureText('CLICK').width;
+    c.fillStyle = '#ff4500';
+    c.fillText('PSE', padX + clickW, logoY);
+    const pseW = c.measureText('PSE').width;
+    const logoBlockEnd = padX + clickW + pseW;
+
+    const now = new Date();
+    const ts = now.toLocaleString('es-ES', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const tsFs = barH * 0.18;
+    c.font = `${tsFs}px Share Tech Mono, monospace`;
+    c.fillStyle = 'rgba(200,220,240,0.45)';
+    c.textBaseline = 'top';
+    c.fillText(ts, padX, vh - barH * 0.32);
+    const tsW = c.measureText(ts).width;
+    const leftBlockEnd = Math.max(logoBlockEnd, padX + tsW) + padX;
+
+    // ── Right area: 3 data fields ──
+    const fieldsStart = leftBlockEnd;
+    const fieldsArea = Math.max(0, vw - fieldsStart - padX);
+    const fieldW = fieldsArea / 3;
+
+    const fields = [
+      { label:'AZ SOL', val: sol.az.toFixed(1) + '°' },
+      { label:'ELEV',   val: (sol.alt < 0 ? '↓' : '') + sol.alt.toFixed(1) + '°' },
+      { label:'CÁMARA', val: S.orReady ? S.camAz.toFixed(0) + '°' : '---°' },
+    ];
+
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+
+    // Vertical separators between slots (and on the left edge of slot 0)
+    c.strokeStyle = 'rgba(255,255,255,0.10)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) {
+      const sx = fieldsStart + fieldW * i;
+      if (i === 0 || i === 3) continue; // skip outer edges
+      c.beginPath();
+      c.moveTo(sx, vh - barH * 0.85);
+      c.lineTo(sx, vh - barH * 0.15);
+      c.stroke();
+    }
+
+    // Row 1: label
+    const labelFs = barH * 0.18;
+    fields.forEach((f, i) => {
+      const fx = fieldsStart + fieldW * (i + 0.5);
+      c.fillStyle = 'rgba(200,220,240,0.55)';
+      c.font = `${labelFs}px Share Tech Mono, monospace`;
+      c.fillText(f.label, fx, vh - barH * 0.74);
+    });
+
+    // Row 2: value, with auto-shrink if too wide for its slot
+    const baseValFs = barH * 0.38;
+    const slotMaxW = fieldW * 0.88; // leave 6% padding each side of separator
+    fields.forEach((f, i) => {
+      const fx = fieldsStart + fieldW * (i + 0.5);
+      let fs = baseValFs;
+      c.font = `bold ${fs}px Orbitron, sans-serif`;
+      let w = c.measureText(f.val).width;
+      if (w > slotMaxW) {
+        fs *= slotMaxW / w;
+        c.font = `bold ${fs}px Orbitron, sans-serif`;
+      }
+      c.fillStyle = '#ffb700';
+      c.fillText(f.val, fx, vh - barH * 0.30);
+    });
+  }
+
+  // ── Mini compass top-right ──
+  if (S.layers.miniCompass) {
+    const oSize = Math.min(vw, vh) * 0.26;
+    drawCaptureCompass(c, vw - oSize/2 - 18, oSize/2 + 18, oSize/2 * 0.9, sol);
+  }
+
+  capturedDataUrl = cap.toDataURL('image/jpeg', 0.92);
+  document.getElementById('previewImg').src = capturedDataUrl;
+  document.getElementById('previewModal').classList.add('visible');
+}
+
+function drawCaptureCompass(c, cx, cy, R, sol) {
+  c.save();
+  c.beginPath(); c.arc(cx, cy, R, 0, Math.PI*2);
+  c.fillStyle = 'rgba(6,8,16,0.78)'; c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.2)';
+  c.lineWidth = 1.5; c.stroke();
+
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(r(-S.camAz));
+  c.translate(-cx, -cy);
+
+  for (let deg = 0; deg < 360; deg += 30) {
+    const ang = r(deg - 90);
+    const r1 = R, r2 = R - (deg % 90 === 0 ? 10 : 6);
+    c.beginPath();
+    c.moveTo(cx + r1*Math.cos(ang), cy + r1*Math.sin(ang));
+    c.lineTo(cx + r2*Math.cos(ang), cy + r2*Math.sin(ang));
+    c.strokeStyle = deg % 90 === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)';
+    c.lineWidth = 1; c.stroke();
+  }
+
+  // trajectory
+  if (S.layers.arTraj && S.gpsReady) {
+    const traj = sunTrajectory(getCurrentDate(), S.lat, S.lon);
+    c.beginPath();
+    let started = false;
+    traj.forEach(p => {
+      if (p.alt < -5) { started = false; return; }
+      const xy = miniXY(p.az, p.alt, cx, cy, R);
+      if (!started) { c.moveTo(xy.x, xy.y); started = true; }
+      else c.lineTo(xy.x, xy.y);
+    });
+    c.strokeStyle = 'rgba(255,183,0,0.5)';
+    c.lineWidth = 1.5;
+    c.setLineDash([2, 3]); c.stroke(); c.setLineDash([]);
+  }
+
+  // cardinals
+  const cards = [{l:'N',d:0,col:'#ff4500'},{l:'E',d:90,col:'rgba(200,220,240,0.7)'},{l:'S',d:180,col:'rgba(200,220,240,0.7)'},{l:'O',d:270,col:'rgba(200,220,240,0.7)'}];
+  c.font = `bold ${R*0.22}px Orbitron, sans-serif`;
+  c.textAlign='center'; c.textBaseline='middle';
+  cards.forEach(card => {
+    const ang = r(card.d - 90);
+    const rr = R - 12;
+    const x = cx + rr*Math.cos(ang), y = cy + rr*Math.sin(ang);
+    c.save();
+    c.translate(x, y); c.rotate(r(S.camAz));
+    c.fillStyle = card.col;
+    c.fillText(card.l, 0, 0);
+    c.restore();
+  });
+
+  c.restore();
+
+  // Sun
+  const xy = miniXY(sol.az, sol.alt, cx, cy, R);
+  const below = sol.alt < 0;
+  if (!below) {
+    const g = c.createRadialGradient(xy.x, xy.y, 0, xy.x, xy.y, R*0.18);
+    g.addColorStop(0, 'rgba(255,183,0,0.5)');
+    g.addColorStop(1, 'transparent');
+    c.beginPath(); c.arc(xy.x, xy.y, R*0.18, 0, Math.PI*2);
+    c.fillStyle = g; c.fill();
+  }
+  c.beginPath(); c.arc(xy.x, xy.y, R*0.075, 0, Math.PI*2);
+  c.fillStyle = below ? '#4a3200' : '#ffb700';
+  c.globalAlpha = below ? 0.3 : 1;
+  c.fill(); c.globalAlpha = 1;
+
+  // Eclipse markers
+  if (S.layers.arEclipse) {
+    S.showEclipse.forEach((on, i) => {
+      if (!on) return;
+      const ep = sunPosition(ECLIPSES[i].date, S.lat, S.lon);
+      const exy = miniXY(ep.az, ep.alt, cx, cy, R);
+      c.beginPath(); c.arc(exy.x, exy.y, R*0.1, 0, Math.PI*2);
+      c.strokeStyle = ECLIPSES[i].color; c.lineWidth = 1.5; c.stroke();
+      c.beginPath(); c.arc(exy.x, exy.y, R*0.035, 0, Math.PI*2);
+      c.fillStyle = ECLIPSES[i].color; c.fill();
+    });
+  }
+
+  // FOV cone
+  const fovHalfRad = r(S.fovH/2);
+  c.beginPath();
+  c.moveTo(cx, cy);
+  c.arc(cx, cy, R*0.6, -Math.PI/2 - fovHalfRad, -Math.PI/2 + fovHalfRad);
+  c.closePath();
+  c.fillStyle = 'rgba(0,229,160,0.1)';
+  c.fill();
+
+  // Camera arrow
+  c.save();
+  c.translate(cx, cy);
+  const arrR = R - 2;
+  c.beginPath();
+  c.moveTo(0, -arrR);
+  c.lineTo(-5, -arrR + 11);
+  c.lineTo(5, -arrR + 11);
+  c.closePath();
+  c.fillStyle = 'rgba(0,229,160,0.85)';
+  c.fill();
+  c.restore();
+
+  c.restore();
+}
+
+function savePhoto() {
+  if (!capturedDataUrl) return;
+  const a = document.createElement('a');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+  a.download = `clickpse_${stamp}.jpg`;
+  a.href = capturedDataUrl;
+  a.click();
+  discardPhoto();
+}
+
+function discardPhoto() {
+  capturedDataUrl = null;
+  document.getElementById('previewModal').classList.remove('visible');
+}
+</script>
+</body>
+</html>
